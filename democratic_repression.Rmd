@@ -1,0 +1,118 @@
+---
+title: "Democratic Repression: Responding in Kind? "
+author: "Christopher Junk"
+date: "March 10, 2019"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lubridate)
+```
+
+```{r, include = F}
+#Load in the dataset
+speed_full <- read.csv("C:/Users/Christopher/Documents/Data/speed/ssp_public.csv")
+speed_full <- data.table::as.data.table(speed_full)
+
+#What is the class of the date variables? 
+class(speed_full$month)
+table(speed_full$month, useNA = "ifany") #there are 67 missing months, I'll delete those for simplicity
+class(speed_full$year)
+table(speed_full$year, useNA = "ifany")
+
+#Delete missing months 
+speed_nonmissing_date <- speed_full[!is.na(speed_full$month),]
+table(speed_nonmissing_date$month, useNA = "ifany")
+
+as.character(speed_nonmissing_date$year)
+speed_nonmissing_date$year_month <- paste0(as.character(speed_nonmissing_date$year), "-", as.character(speed_nonmissing_date$month))
+speed_nonmissing_date$year_month
+
+names(speed_nonmissing_date) <-tolower(names(speed_nonmissing_date))
+
+#Ultimately my analyses will be in country-month units so I need to generate a year-month variable to group on later. I also need to have a year-month format for both start and end dates, because I have events that span several months. I will later assume the an event is equally active across all months it is active because I ultimately use a binary DV and that assumption is therefore not impactful. I care, therefore, IF an event occurred in a given month, not about its intensity. 
+
+speed_nonmissing_date$start <- as.Date(speed_nonmissing_date$jul_start_date, origin = "1945-01-01") #making the julian start date 
+
+sum(is.na(speed_nonmissing_date$start)) #check for missing values 
+
+speed_nonmissing_date$start_ym <- stringr::str_replace(speed_nonmissing_date$start, "\\-\\d{2}$", "")
+#speed_nonmissing_date$start_ym #this is a string for the year-month of the start of an event
+
+speed_nonmissing_date$start_year_month <- zoo::as.yearmon(speed_nonmissing_date$start_ym)
+class(speed_nonmissing_date$start_year_month) #class is yearmon for the string created above
+
+speed_nonmissing_date$end <- as.Date(speed_nonmissing_date$jul_end_date, origin = "1945-01-01") #making the julian start date 
+#speed_nonmissing_date$end
+sum(is.na(speed_nonmissing_date$end)) #check for missing values 
+
+speed_nonmissing_date$end_ym <- stringr::str_replace(speed_nonmissing_date$end, "\\-\\d{2}$", "")
+#speed_nonmissing_date$end_ym #create a string for the year-month of the end of an event
+
+speed_nonmissing_date$end_year_month <- zoo::as.yearmon(speed_nonmissing_date$end_ym)
+class(speed_nonmissing_date$end_year_month) #class is yearmon of the string created above for end year-month
+
+speed_nonmissing_date$start_month <- month(speed_nonmissing_date$start) #extract start month from start date
+#speed_nonmissing_date$start_month
+
+speed_nonmissing_date$start_year <- year(speed_nonmissing_date$start) #extract start year from start date
+#speed_nonmissing_date$start_year
+
+speed_nonmissing_date$end_month <- month(speed_nonmissing_date$end) #extract end month from end date 
+#speed_nonmissing_date$end_month
+
+speed_nonmissing_date$end_year <- year(speed_nonmissing_date$end) #extract end year from end date 
+#speed_nonmissing_date$end_year
+
+#create a duration in months 
+speed_nonmissing_date$duration <- ((speed_nonmissing_date$end_year_month - speed_nonmissing_date$start_year_month) *12) + 1 #If you just subtract the dates then it gives it to you as a function of a year, each month being 1/12th of a year. Multiplying it by 12 gives me the number of months, and add one because a minimum duration is the 1 month that it existed. 
+```
+
+The variables that I care about are the following:  
+
+  * start_year_month: year-month variable for start of event  
+  * end_year_month: year-month variable for end of event  
+  * duration: number of months between start and end  
+  * cowcode: COW country codes  
+  * country: country text  
+  * pol_express: symbolic expression  
+  * mass_express: mass protests  
+  * pol_viol: political violence  
+  * intang_rep: intangible repression  
+  * st_repress: tangible repression  
+  * stat_viol: violent repression
+  
+
+  
+```{r, include=F}
+# speed_relevant <- data.frame(
+#   start_year_month = rep(speed_nonmissing_date$start_year_month, speed_nonmissing_date$duration)
+#   end_year_month = rep(speed_nonmissing_date$end_year_month, speed_nonmissing_date$duration)
+#   duration = rep(speed_nonmissing_date$duration, speed_nonmissing_date$duration)
+#   cowcode = rep(speed_nonmissing_date$cowcode, speed_nonmissing_date$duration)
+#   pol_express = rep(speed_nonmissing_date$pol_express, speed_nonmissing_date$duration)
+#   mass_express = rep(speed_nonmissing_date$mass_express, speed_nonmissing_date$duration)
+#   pol_viol = rep(speed_nonmissing_date$pol_viol, speed_nonmissing_date$duration)
+#   intang_rep = rep(speed_nonmissing_date$intang_rep, speed_nonmissing_date$duration)
+#   st_repress = rep(speed_nonmissing_date$st_repress, speed_nonmissing_date$duration)
+#   stat_viol = rep(speed_nonmissing_date$stat_viol, speed_nonmissing_date$duration)
+#     )
+
+speed_relevant <- speed_nonmissing_date %>% select(
+    start_year_month, end_year_month, eventid, duration, cowcode, country, pol_express, mass_express, pol_viol, intang_rep, st_repress, stat_viol
+)
+
+speed_relevant_expand <- reshape::untable(speed_relevant, num = speed_relevant$duration)
+
+# speed_relevant_expand$seq <- speed_relevant_expand %>% 
+#     group_by(eventid) %>% 
+#     mutate(seq = row_number())
+
+library(data.table)
+
+speed_relevant_expand[, seq := seq_len(.N), by = eventid]
+speed_relevant_expand[, seq := rowid(eventid)]
+    ```
+
