@@ -114,5 +114,15 @@ library(data.table)
 
 speed_relevant_expand[, seq := seq_len(.N), by = eventid]
 speed_relevant_expand[, seq := rowid(eventid)]
-    ```
+speed_relevant_expand[, month_increment := seq/12]
+
+speed_relevant_expand[, year_month := ((start_year_month - 1/12) + month_increment)]
+
+speed_country_month <- speed_relevant_expand %>% 
+                        group_by(country, cowcode, year_month) %>% 
+                        summarize(mean(pol_express), mean(mass_express), mean(pol_viol), mean(intang_rep), mean(st_repress), mean(stat_viol))
+  #select(pol_express, mass_express, pol_viol, intang_rep, st_repress, stat_viol)
+
+
+```
 
