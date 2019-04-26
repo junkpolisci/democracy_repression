@@ -1,0 +1,364 @@
+---
+title: "Democratic Repression: Responding in Kind? "
+author: "Christopher Junk"
+date: "March 10, 2019"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lubridate)
+```
+
+```{r, include = F}
+#Load in the dataset
+speed_full <- read.csv("C:/Users/Christopher/Documents/Data/speed/ssp_public.csv")
+speed_full <- as_tibble(speed_full) %>% 
+              janitor::clean_names()
+
+#add country codes
+speed_full$country
+speed_full <- speed_full %>% 
+  mutate(cowcode = countrycode::countrycode(country, "country.name", "cown"),
+         cowname = countrycode::countrycode(cowcode, "cown", "cowc"),
+         start_date = as.Date(jul_start_date, origin = "1944-12-31"), #make the starting date formatted in readable way
+         end_date = as.Date(jul_end_date, origin = "1944-12-31")) %>% #make the ending date formatted in a readable way 
+         select(year, month, day, start_date, end_date, day_span, everything())
+  
+#Delete missing months 
+speed_nonmissing_date <- speed_full %>% 
+                         filter(!is.na(start_date),
+                                !is.na(end_date), #remove those without starting or ending dates -- only 67 observations  
+                                !is.na(cowcode)) %>%  #remove missing values for identifying a country. These would not fit into country-month unit of analysis. 
+                         select(everything())
+
+                          
+#Ultimately my analyses will be in country-month units so I need to generate a year-month variable to group on later. I also need to have a year-month format for both start and end dates, because I have events that span several months. I will later assume the an event is equally active across all months it is active because I ultimately use a binary DV and that assumption is therefore not impactful. I care, therefore, IF an event occurred in a given month, not about its intensity. 
+
+speed_nonmissing_date$start_ym <- stringr::str_replace(as.character(speed_nonmissing_date$start_date), "\\-\\d{2}$", "")
+#speed_nonmissing_date$start_ym #this is a string for the year-month of the start of an event
+
+speed_nonmissing_date$start_year_month <- zoo::as.yearmon(speed_nonmissing_date$start_ym) #this is a yearmon class variable of the string above
+
+
+speed_nonmissing_date$end_ym <- stringr::str_replace(as.character(speed_nonmissing_date$end_date), "\\-\\d{2}$", "")
+
+speed_nonmissing_date$end_year_month <- zoo::as.yearmon(speed_nonmissing_date$end_ym) #class yearmon of zoo 
+
+speed_nonmissing_date$start_month <- month(speed_nonmissing_date$start_date) #extract start month from start date
+
+speed_nonmissing_date$start_year <- year(speed_nonmissing_date$start_date) #extract start year from start date
+
+speed_nonmissing_date$end_month <- month(speed_nonmissing_date$end_date) #extract end month from end date 
+
+speed_nonmissing_date$end_year <- year(speed_nonmissing_date$end_date) #extract end year from end date 
+
+#create a duration in months 
+speed_nonmissing_date$duration <- ((speed_nonmissing_date$end_year_month - speed_nonmissing_date$start_year_month) *12) + 1 #If you just subtract the dates then it gives it to you as a function of a year, each month being 1/12th of a year. Multiplying it by 12 gives me the number of months, and add one because a minimum duration is the 1 month that it existed. 
+```
+
+The variables that I care about are the following:  
+
+  * start_year_month: year-month variable for start of event  
+  * end_year_month: year-month variable for end of event  
+  * duration: number of months between start and end  
+  * cowcode: COW country codes  
+  * country: country text  
+  * pol_express: symbolic expression  
+  * mass_express: mass protests  
+  * pol_viol: political violence  
+  * intang_rep: intangible repression  
+  * st_repress: tangible repression  
+  * stat_viol: violent repression
+  
+
+  
+```{r, include=F}
+#grab the relevant variabels for this analysis 
+speed_relevant <- speed_nonmissing_date %>% 
+                  select(start_year_month, 
+                         end_year_month, 
+                         eventid, duration, 
+                         cowcode, 
+                         country, 
+                         cowname, 
+                         pol_express, 
+                         mass_express, 
+                         pol_viol, 
+                         intang_rep, 
+                         st_repress, 
+                         stat_viol
+                         )
+
+speed_relevant_expand <- reshape::untable(speed_relevant, num = speed_relevant$duration)
+
+speed_relevant_expand <- speed_relevant_expand %>% 
+                         group_by(eventid) %>% 
+                         mutate(seq = seq_along(duration), #a count of how many months the event lasts
+                                month_increment = seq/12, #the count divided by 12
+                                mdate = (start_year_month - 1/12) + month_increment, #monthly date for each month an event was active
+                                ) %>% 
+                         select(seq, 
+                                duration, 
+                                eventid, 
+                                month_increment, 
+                                mdate, 
+                                start_year_month, 
+                                end_year_month,  
+                                everything())
+
+speed_relevant_expand$year_month <- zoo::as.yearmon(speed_relevant_expand$mdate)
+
+
+speed_country_month <- speed_relevant_expand %>% 
+                        group_by(cowcode, year_month) %>% 
+                        summarize(mean(pol_express),
+                                  mean(mass_express),
+                                  mean(pol_viol),
+                                  mean(intang_rep),
+                                  mean(st_repress),
+                                  mean(stat_viol), 
+                                  first(cowname)) %>% 
+                        arrange(cowcode, year_month) %>% 
+                        janitor::clean_names() %>% 
+                        ungroup()
+
+#the final object of the speed data is ready: speed_country_month
+```
+
+```{r include=F}
+#This chunk generates the controls and merges the final dataframe together 
+
+#First, I need to get my universe of possible cases. I start with Correlates of War systemic membership dataset because it has all possible country-years available. 
+country_entry <- read.csv("http://www.correlatesofwar.org/data-sets/state-system-membership/states2016/at_download/file")
+
+country_duration <- country_entry %>% 
+                 mutate(enter_date = paste0(styear, "-", stmonth), #country started
+                        leave_date = paste0(endyear, "-", endmonth), #country ended
+                        enter = zoo::as.yearmon(enter_date), #as zoo class
+                        leave = zoo::as.yearmon(leave_date)  #as zoo class
+                        ) %>%
+                 select(cowcode = ccode, #renaming relevant variables 
+                        cowname = stateabb, 
+                        enter, 
+                        leave
+                        )
+
+country_duration <- country_duration %>% 
+                    mutate(duration = ((leave - enter) * 12 ) + 1 #number of months a country existed
+                           ) 
+
+country_expand <- reshape::untable(country_duration, num = country_duration$duration) #expand to create one row for each month a country existed
+                 
+country_month <- country_expand %>% 
+                 group_by(cowcode) %>% 
+                 mutate(seq = seq_along(duration), #count of months country existed
+                        month_increment = seq/12, #the count divided by 12
+                        mdate = (enter - 1/12) + month_increment #unformatted zoo yearmon object
+                        ) %>%   
+                 ungroup()
+
+country_month$year_month <- zoo::as.yearmon(country_month$mdate) #format the yearmon object 
+
+system_month <- country_month %>% 
+                select(cowcode,
+                       cowname,
+                       year_month) #final dataframe of all possible country_months
+```
+e and Temporal Differences
+ When do democracies resort to repression? The literature on the dissent-repression nex
+Dissent and Repression: Regimus has been active for over forty years, but there are still important methodological improvements that can be made to this literature. To date, the most concrete findings are summarized in Davenport’s (2007) literature review: the law of coercive responsiveness, more murder in the middle, and the domestic democratic peace. The law of coercive responsiveness is that states are most likely to repress in response to a threat. More murder in the middle is the finding that regime types somewhere between full authoritarian and full democracy are the most violent repressors. The domestic democratic peace is threefold: democratic institutions increase the costs of state repression, democratic citizens accept democratic values of nonviolent expression and negotiating, and democracies provide alternative measures for political control. It is important to note that the domestic democratic peace only applies to states that cross a certain threshold of democratic-ness at which point they become ‘full’ democracies (Davenport 1995, 1999; Davenport and Armstrong 2004; Poe and Tate 1994; Regan and Henderson 2002). 
+Further motivation comes from the terrorism literature. A variety of studies have shown that as democratic citizens perceive their own threat levels increasing, they offer up individual autonomy and rights in exchange for greater security offered by the state (Bloch-Elkon 2011; Davis and Silver 2004; Finseraas and Listhaug 2013; Mondak and Hurwitz 2012). Importantly, this shows that in democracies if the dissent sufficiently threatens the population at large they will accept repression if it means lower perceived threat levels. This mechanism provides legitimacy for the use of repressive policy by democratic states. 
+	I define dissent broadly: any action that is political in motivation initiated by a non-government entity with the intention of political change. In measurement, I divide dissent into three categories  that are captured through three distinct independent variables: symbolic dissent, mass dissent, and political violence. Symbolic dissent  requires no mass mobilization and can take the form of leaflets, books, films and other mediums that criticize the state. Mass dissent is nonviolent mobilization of large groups of people. Obvious examples of this include protests such as the Women’s March and other such mass protests. Political violence is the use of violence to create political change. This definition improves upon recent literature by including a broader conception of dissent and differentiating between different them. 
+	Davenport (2007, 2) defines repression as: “the actual or threatened use of physical sanctions against an individual or organization, within the territorial jurisdiction of the state, for the purpose of imposing a cost on the target as well as deterring specific activities and/or beliefs perceived to be challenging to government personnel, practices or institutions.” I expand this definition of repression in an important way: the negation of civil liberties such as freedom of speech, religion, association, gathering, and movement in nonviolent ways also constitutes repression. The literature mostly ignores this type of repression, largely due to data issues. Much of the repression datasets that exist are based on and developed around violent repression of physical integrity rights (Francisco 1996; Gibney et al. 2018; Poe and Tate 1994), or only take into account human rights violations or scores (Davenport 1999; Davenport and Armstrong 2004; Franklin 2008; Regan and Henderson 2002; Stohl et al. 1986).  I categorize repression into three types: intangible state repression, tangible state repression, and violent repression. Intangible state repression violates basic rights in a nonviolent manner such as censorship, martial law, imposing curfews, etc. Tangible state repression involves the use of state capacity to coerce citizens without using violence, detention, or the military. Violent repression uses lethal force, the military, detention, torture, or any combination of violent measures taken to coerce individuals. These definitions are provided by the Social, Political, Economic Events Database (SPEED) which is the data used in this project (Nardulli, Althaus, and Hayes 2015). 
+Researchers so far have considered only contemporary or directly previous time periods when considering the effect of dissent on state repression with few exceptions(Davenport 1996) . By considering only the immediate temporal proximity, the previous analyses have underestimated the effect of residual dissent in state memory. I will show that when the analysis takes into account the memory of dissent democracies repress in response to persistent recent threats. I will show that states repress as a reaction to the memory of dissent because that represents the full threat experienced by a state, as well as in response to different types of dissent. When dissidents take to the street, any actions that they take in isolation are weak relative to state control and power. However, when the recent history of dissent is considered, the state looks at a broader pattern of dissent and updates its perceived threat level. As dissent becomes more severe in recent memory, the threat level rises to both the state and the population at large and repression becomes a more attractive tool for political control. 
+Another improvement I make in this paper is a more appropriate temporal unit of analysis. Most existing studies have used country-year units of analysis. Repression and dissent are both day-to-day activities that can vary greatly in intensity and frequency within a year. Aggregating both measures to yearly levels loses large amounts of variation in the dependent and explanatory variables. I use SPEED to generate a country-month unit of analysis that increases the observable temporal variance. This also allows a more fine-grained analysis of how quickly a state responds to dissent. 
+One final improvement I will make on the literature is improving the consideration of democracy as a variable. Whereas most of the literature to date has broadly used the Polity series of variables as a democratic indicator (Davenport 1999; Henderson 1991; Poe and Tate 1994), I will use more explicit definitions of democracy. I define democracy according to its electoral institutions. As such, I will use the Lexical Index, which is an additive scale considering electoral components of a state. I define a full democracy according to a six out of six on the Lexical Index: elections exist, elections allow multiparty competition, legislative and executive offices are filled through election, and full female and male suffrage. 
+I find that democracies repress as a response to symbolic dissent and as a response to political violence, but not as a response to mass dissent. This suggests that democracies will repress if they think it will go unnoticed, or if they think it is legitimate. 
+Dissent, Repression, and Response
+	Before discussing how the state responds to dissent, it is important to note what factors predict state repression in general. There is a rich literature theorizing and testing different explanatory variables that influence repression without considering it as a response to dissent. Mitchell and McCormick (1988) provide some of the earliest quantitative analysis. Their work suggests that state wealth has at least a moderately negative impact on the probability of a state repressing. Interestingly, they find that states with British colonial heritage are the least likely to repress because of the institutions inherited that make abuse of state powers taboo. Mitchell and McCormick also show evidence that the most autocratic rulers (e.g. personalist and totalitarian) are the most likely to violate human rights. 
+	Henderson (1991) shows that democracy and economic growth negatively predict repression, while inequality positively predicts repression. This is the first appearance of the democratic argument in empirical testing. Poe and Tate (1994) corroborate this finding but suggest that economic standing alone is enough to dissuade state repression. Davenport (1995) also finds support for the hypothesis that democracies repress less, and he uses Taylor and Jodice (1983) measures of repression that focus on nonviolent repression.  Davenport and Armstrong (2004) employ nonparametric testing in an atheoretical examination to show that states must hit a certain threshold of democratic-ness before repression starts to decline. This is the emergence of the “more murder in the middle” (Davenport 2007, 11) pattern: states at the extreme ends of regime types have no need for repression, but states in between the extremes face different obstacles that makes repression more likely. This is because full autocracies have consolidated power and little respect for human rights initially, and thus are unhindered in their use of repression as a policy tool. This creates an expectation that repression would be a standard response to dissent, and thus dissent is less likely, and repression is less necessary. In full democracies repression is theoretically an unacceptable policy tool, while (nonviolent) dissent is a protected civil liberty. Therefore, dissent should not beget repression both because it is legal and because the state’s use of repression would be illegitimate. 
+	A last variable influencing state repression independent of dissent is whether a state is involved in a war. Poe and Tate (1994) find that wars increase repression domestically because a state needs to maintain political control more during turbulent political times. Danneman and Ritter (2014) show that states recognize the contagion threat of neighboring civil wars and preemptively repress their own population in order to maintain power and quell potential rebellion. 
+Davenport (1995) suggests that a state’s threat perception is a function of three dissent factors: frequency, severity, and variety. As these three factors increase, states perceive threat as being greater and become more likely to repress. They also show that as levels of dissent differ from the norm (average level of dissent), states perceive a greater threat and repress more often. Regan and Henderson (2002) corroborate this finding broadly showing that states that feel threatened now are more likely to repress. Davenport (1996) later shows that lagged yearly sums of political conflict positively associate with repression, but he does not test for moving sums or moving averages. Moore (2000) shows that states change their strategy for dealing with dissent (accommodation or repression) when the current strategy is met with further dissent. 
+The relationship between dissidents and repressors is also likely endogenous. Lichbach (1987) developed a model of dissident response to repression. In this model, dissidents have two dissent options: legal (nonviolent) and illegal (violent). Dissidents prefer to use more effective dissent strategies and will invest more time and money into those strategies. When states recognize which strategies are more successful (gain more accommodation) states will selectively repress to lower the efficacy of dissident movements. This model suggests that when states begin to repress strategically, overall levels of dissent increase as dissidents increase quantity of dissent to make up for lost quality of dissent. Moore (1998) tests this model against other theorized relationships and finds support for exclusively Lichbach’s argument. 
+Francisco (1995, 1996) compares all theorized dissent responses to repression. He identifies five theorized relationships: backlash, inverted-U, nonlinear, and adaptive. A backlash relationship predicts an absolute increase in dissent as a response to repression. An inverted-U response posits that at high and low levels of repression dissent is uncommon, but the middle-ground sees high levels of dissent. The nonlinear relationship suggests that repression and dissent oscillate in a relatively unpredictable manner. The adaptive dynamic is Lichbach’s pattern. Francisco also finds comparatively more evidence for Lichbach’s dynamic theory. 
+The literature has not yet utilized computer coded event datasets to test the dynamics of the dissent-repression nexus. Moreover, no work to date has provided a comprehensive long-run analysis across all states in the post-WWII period. The SPEED dataset allows me to do that. Datasets used in the past have been limited to least developed countries (Regan and Henderson 2002), violent dissent types (Davenport 1995; Francisco 1996; Moore 1998, 2000; Regan and Henderson 2002), and yearly aggregations (Davenport 1996; Moore 1998, 2000) or single-year estimations (Henderson 1991, 1993). Additionally, all previous work is more constrained in its temporal domain than this analysis. These all contribute in important ways to the basis of the theory proposed in the next section. I intend to expand upon their theory and use better fine-grained data to estimate my models. 
+State Memory of Dissent and the Use of Repression
+	This theory is based on two fundamentally assumed goals of leaders that do not vary across regime types: political survival(Bueno de Mesquita et al. 2003), and the provision of security for the state. All leaders today want to be leaders tomorrow, and political survival is of the utmost importance. The manner in which political survival is secured can vary greatly across regime types from the co-optation, legitimation, and repression in autocracies (Gerschewski 2013) to electoral success in democracies. The provision of security can be broadly interpreted as the provision of any necessary public goods to prevent the state from descending into anarchic chaos of continual violence. This assumption is intentionally broad to show that a leader must provide, at minimum, security sufficient to maintain territorial integrity, and at best, prosperity and high standards of living. 
+It is important to note that security is not strictly a public good because it is potentially excludable from certain populations (e.g. selective repression of minority groups). Security defined as maintaining the territorial integrity of the state (i.e. avoiding civil war and state collapse), however, is non-excludable. This type of security provision is particularly salient to the theoretical understanding of repression in democracies because without territorial integrity the leadership of the state has no governing authority. Once dissent presents a sufficient threat to the security of the state defined this way the state can legitimately repress or violate civil liberties in order to provide security. There is ample evidence in the terrorism literature that in democracies leadership even has support for such actions (Bloch-Elkon 2011; Davis and Silver 2004; Mondak and Hurwitz 2012).
+According to modern democratic theory, democracies are committed to civil liberties and human dignity rights in a broad sense (Dahl 1989; Ober 2012). Power in democracies is derived through legitimate electoral success and popular support. Democratic norms of nonviolent bargaining differ starkly from the less institutionalized bargaining practices of autocracies (Haggard and Kaufman 2016).  Because of these norms, policymaking in democratic states consists of policy changes to provide sufficient public and private goods to gain support of a winning coalition. Leadership which provides unsatisfactory policy to accrue sufficient support to create a winning coalition will lose upcoming elections and be replaced.  Leaders must respond to dissent with policy in ways that provide sufficient security to please their winning coalition. Given that this paper considers only full democracies, this winning coalition is at least half the population. In a majoritarian system like the US the president must please the at least half of the voters to keep his seat. In a proportional representation system like the UK the policy of the prime minister must please his/her own party as well as any parties also a member of a coalition government. 
+Policy made by incumbents must not contradict the basis of democratic rule: respect for civil liberties and human dignity rights. However, leaders are also afforded some leeway to act because of democratic legitimacy: leaders won their power through free and fair electoral processes and are therefore entitled to some autonomy in responding to threats as they see fit. They must respond in ways that do not compromise their chances of future political success. In  an optimistic view of democratic governance leaders may only resort to repression once the level of threat is sufficiently high that repressive policy is the best way to assure security for the state and satisfy the winning coalition. 
+The difficulty of traditional definitions of democracies as commitments to human rights is that these states will by definition never repress, even nonviolently. I chose to define democracies in terms of electoral institutions because it largely escapes the tautology just described and allows for states that are electorally democratic to be logically capable of repressing in the coding scheme. This definition and operationalization still assumes that elections are free and suffrage is universal, but it makes no assumptions about state behavior beyond their behavior around elections.
+	When dissidents dissent, political survival and state security are both potentially threatened. Threat has been previously theorized to be a function of: quantity of dissent, number of strategy types, severity, and difference from the norm (Davenport 1995). I distinguish between three main types of dissent: symbolic “small-gauge” dissent, mass dissent, and political violence. Symbolic dissent is nonviolent non-mass dissent that express political discontent. Mass dissent is also nonviolent, and can employ similar strategies as symbolic dissent, but requires a mass mobilization component. Political violence is the use of force by non-state actors to express discontent with the state. 
+	Across those types of dissent, one should expect different responses. Some dissent is less threatening than others. Nonviolent dissent poses little physical threat to the state and offers no legitimate justification for the use of repression, especially violent repression, to quell dissent. Mass protest poses no direct physical threat to the state because it is nonviolent, however it signals two dangers for the state: the issue is sufficiently salient to generate dissent, and there is broad enough support for the dissenting message to generate mass gatherings. However, it is possible that malicious leaders that do not truly respect the democratic norms of governance may view symbolic dissent and mass protest as a threat to their own potential political success. In this context the state is confronted with incentives to act, but the form of those actions depends on what the state may legitimately do. Democracies cannot legitimately use force or restrict civil liberties because of such protest because they are rights protected by the democratic constitutions. This leads to the first expectation of this project: nonviolent dissent should never generate repressive responses from democratic leaders. Because democracies promise civil liberties that make nonviolent dissent possible, it would be illegitimate for democratic leaders to restrict civil liberties or use violent repression to quell nonviolent dissent. Any results to the contrary would suggest that democratic leaders are not as willing to uphold civil liberties as they claim. 
+Hypothesis 1: Democracies will not use any type of repression (intangible, tangible, or violent) in response to nonviolent dissent (symbolic or mass). 
+Political violence presents a threat to the state and civilians, thus legitimizing the government use of force in all regimes types and potentially increasing mass support of repressive governing (Davis and Silver 2004). However, political violence is not a carte blanche for violent repression in democracies. States have a variety of tools that they should exhaust before resorting to any sort of violent repression, and even in those cases where violent repression is used it should be targeted and selective in order to minimize the threat. A real-world example of a full democracy repressing in the face of threat can be seen in France in 2016. In response to a string of terrorist attacks claimed by ISIS, France declared a state of emergency which restricts certain rights of citizens, and then proposed to change and expand the powers elected officials have (Breeden 2016). A similar example can be seen in the US response to 9/11 with the Patriot Act, which expanded the power of the government to gather information about the citizens that should be protected by the prerequisite of a warrant to gather personal information (Baker 2015). In both cases, nonviolent means were used to expand the reach of the state in favor of expanding the state’s ability to provide security. Research has also shown that the population supports these changes as they feel threat levels increasing (Davis and Silver 2004; Mondak and Hurwitz 2012).
+Theoretically, expanding governmental powers and implementing nonviolent repression via monitoring and information collection, detentions, curfews, martial law, and declaring states of emergency as discussed above allows the government to provide better security in a nonviolent manner. At the same time, providing security in these ways violates the civil liberties the state is required to defend to maintain its democratic status in the normative sense, but it is unaffected by the electoral definition implemented here. I expect that given sufficient threat over time resulting from political violence democracies will implement intangible and tangible repression first, and then violent repression only in the face of extraordinarily threatening circumstances.  
+Hypothesis 2: As political violence increases over time in democracies leadership will be more likely to implement repressive policies to ensure security.   
+The threat dissent poses accrues in memory over time. This factor has not been accounted for empirically in the literature. Dissent at time t may be independent in motivation and population from dissent at time t-1, but the state recalls and is potentially threatened by both events regardless of whether they are ideologically connected. More importantly, theories of repression suggest that the frequency and severity, in conjunction, are important in determining the states threat perception (Davenport 1995).  A state’s leadership wants to survive politically and protect the state as a whole. As a result, its threat perception is a function of all recent previous dissent. 
+	In order to test the temporal dynamics of state memory of dissent there must be an explicit memory length to test. Theorizing about memory length is arbitrary. Human recall is not infinite, nor is it absolutely confined to a certain number of days or years. Empirically, Davenport (1996) agnostically estimates a cross-correlation lag distribution analysis of past years of dissent on current levels of repression and the data shows that lagged dissent positively correlates and is statistically significant up to seven years in the past. I will adopt a seven year memory length in testing the temporal dynamics.  
+Another important aspect of memory is its decay. Individuals remember what happened yesterday better than what happened last month. The exception to this rule is when last month’s event was especially noteworthy. To account for this aspect of human memory, I must model the decay of the impact of previous events. To account for this, I institute a measure of dissent memory that incorporates a decay function over the last seven years. This is discussed at greater length in the research design section. Simply put: dissent that happened longer ago is downwardly weighted in memory through a decay function that allows particularly severe or intense events to have a longer-lasting presence in the state’s memory of dissent. The broad expectation as discussed above is: as the memory of violent dissent increases, the state’s perceived level of threat increases, and repression becomes more likely. 
+Previous research analyzes regime types together, and here I analyze democracies independently of nondemocracies. Thus, while this expectation is not particularly novel in general, it is novel to expect that this is a persistent effect in democracies. Once dissidents have crossed the threshold to use violence the state has legitimacy in using force to stop them for two reasons: they must stop them to provide security for the general public and if they do not provide security they face potential competency costs (Gelpi and Grieco 2015; Smith 1998). I also expect that states will apply all possible repressive tools in the context of extreme violent dissent because of the seriousness of the threat political violence poses: states will do whatever possible to address the security threat, and they will have legitimacy in doing so because political violence is already occurring. 
+
+Data and Research Design
+	I use the SPEED data aggregated at the monthly level. My level of analysis is country-month. The SPEED data covers 192 countries, the Lexical Index covers 173 countries, and I include only full democracies on the Lexical Index scale (6 out of 6). This constrains my analysis 96 countries since World War II.
+	The SPEED dataset uses machine coded news articles to gather information about dissent and repression events from around the world. It gathers information from a variety of news sources and codes the types of initiators (government or nongovernment), the types of events, the number of participants, the length of event, the severity (number killed and injured), and several other variables. Because the data is machine generated, it lacks the preciseness that comes with human coding, but it gains the advantage of having more observations at smaller time intervals. The data in its original form has the event as the unit of analysis with start and end dates specified. To account for dissent events that lasted long periods of time I had to make some simplifying assumptions. First, I expanded the data so that each event has one observation for each month in which it was active at least one day. Second, I have no choice but to assume that the overall repression and dissent scores given in the SPEED data is constant over the entire period that the event was active. For example, say that there was an event with high levels of dissent that lasted six months, due to the data’s original format my only option is to assume that the dissent level was equally high for each of the six months. This is the most egregious assumption I make. After all events had one observation per month in which they occurred, I collapsed all observations and took the average levels of dissent and repression according to the types discussed for each month. At this point, the unit of analysis becomes country-month, and each dissent types has only one average value per country-month. 
+	The dependent variable is a binary indicator of repression. The dataset specifies three types of repression: intangible, tangible, and violent. The dependent variables is coded zero if no repression occurs, and one if the corresponding type of repression occurs. I choose to binarize the data because I only really am concerned with whether or not repression occurs, not how bad the repression was.  
+	The primary independent variables are the memory of each type of dissent. These variables are continuous. Symbolic “small-gauge” dissent is made up of four variables: whether the event was symbolic, whether the event had more than ten initiators, the length of the event, and whether violence is advocated . Mass dissent is a function of: the number participating, whether a weapon was used, or injury was caused, and whether violence was advocated. Political violence is a function of: whether the attack was targeted at a person, an ordinal weapons grade scale, and a count of those killed and injured. 
+	The memory variable was crafted using an exponential decay function. I use the seven year memory length suggested by Davenport (1996). The memory of dissent is equal to 
+dissent memory_mk=∑_(y=1)^7▒∑_(m=1)^12▒〖dissent_my^(〖(.9)〗^y ) 〗.
+Where k is the temporal distance in terms of years and m is the temporal distance in terms of months. For example, for the country-month observation of January 2000, k=1 is the year of December 1999 to December 1998, and each month in this year is m ϵ 1:12.  Intuitively, this function sums the values for all months in a year. Then, that sum is exponentiated to the  .9 to the y. For one year in the past y is equal to one, and so on. Using January 2000 as an example still, the summed dissent of a year seven years ago was taken to the power of 〖.9〗^7=0.48. Assume the political violence has a value of 200 for this month, its contribution to memory seven years later is 〖200〗^(〖.9〗^7 )=12.61. This function downwardly weights the events of the past, as they become less recent up to seven years, at which point they are dropped from memory. 
+	Relevant controls include: logged GDP per capita in constant 2011 US Dollars (The Next Generation of the Penn World Table 2013), total population, urban population(Coppedge et al. 2011) , and whether or not the state was currently experiencing a war according to the Correlates of War dataset(Sarkees, Sarkees, and Wayman 2010).  Economic development has been hypothesized to decrease the likelihood of repression (Henderson 1991). States in wars have been shown to repress more often as a way to secure the domestic front (Young 2013). 
+	Because my dependent variable is binary, I will use logistic regression to test my hypotheses. The unit of analysis is country-month, but some variables vary at the country-year unit of analysis. To deal with this multilevel structure of the data I use random effects models using the year as the random intercept variable. This corrects standard errors that would have been misspecified using standard logistic regression and allows confident hypothesis testing. To account for time I implement Carter and Signorino’s (2010) advice and use a time polynomial.  
+	To account for  the highly correlated nature of my dissent variables I estimate them in separate models. I also estimate a fourth model for each dependent variable in which the three dissent variables are added together. Each type of repression represents its own dependent variable, so there are three sets of four estimations. It is logical to assume that if higher levels of dissent such as political violence or mass protests are occurring then lower levels of dissent are also occurring. However, because these variables are highly correlated they cannot be included in the same model. In the fourth model the summed memory of dissent presents the total memory of all dissent types added together. The results below are coefficient plots of the standardized memory variables . There are tables including full results with control variables in the appendix, but for the main text of the manuscript control variables are excluded from discussion.
+Results and Discussion
+	Figure 1 below shows the coefficient plot of the main independent variables. Each dot represents a coefficient from an independent multilevel logistic regression. I estimate each model separately to avoid multicollinearity problems associated with estimating the variables separately. This way, the variables do not interfere with each other and allow me to interpret them independently.
+
+	First, I will interpret the effect that symbolic dissent has on the likelihood of repression. The results strongly contradict my hypothetical expectation the democracies do not repress in response to symbolic dissent. Symbolic dissent should represent the strongest protected class of civil liberties that democratic citizens have as freedom of speech and press are fundamental civil liberties that underpin democratic society. The results show that as the memory of symbolic dissent increases the likelihood of all types of repression increases. Particularly troublesome for the prospect of democratic governance is that disproportionate response to symbolic dissent is apparently taking place because tangible and violent repression are in no way ‘responding in kind’ to symbolic dissent. 
+	One concern with this finding could be the distribution of the data. Indeed, the data is right-skewed with most of the observations being near zero and few observations being near the maximum. If this were the problem one common solution to handling variables of this distribution type is to log them and include this transformed variable in the final model. This specification returns similar results. In fact, this transformed specification returns similar results for all variable types because right-skewed distributions are common with this data. 
+	One finding the bodes well for democratic optimism is that mass protests do not beget repression of any kind. These rights are also generally protected by constitutions in democracies and the public should not be punished repressively for exercising these rights. This expectation is supported with the data, indicating the democracies are not willing to use intangible, tangible, or violent repression as a response to dissent. 
+	Hypothesis 2’s expectation is upheld. As the memory of political violence increases the state is more likely to use all types of repression to combat it. This is a sign of good governance. Political violence poses the greatest threat to the population, and the only situation in which it is remotely justifiable for a democratic state to resort to any type of repressive policies. In this context, democracies do respond in kind, however I cannot conclude that they are targeting their repressive policies to the perpetrators. This finding may bode poorly for the overall prospect of freedoms in democracy during times of political violence: if threat is sufficiently high everybody suffers in the name of public security. This finding is corroborated with the additive measure of total dissent: when total dissent in memory increases, and the threat it poses therefore increases, all types of repression are more likely to occur. 
+	These results seem to suggest that democracies willingly repress when circumstances legitimate it, and that they repress when they think nobody is watching. Political violence legitimates the use of repressive policies, so democratic leaders face no cost for enacting these policies. Mass protests pose little threat to public security, but great threat leadership survival. Mass protests are also generally more organized and state response to such events are much more visible than symbolic dissent because of the organized nature of the dissent. In other words, if the state enacts repressive policies to fight symbolic dissent then they can get away with it unnoticed if they use intangible repression. Few would notice, and therefore few would care. However, it makes little sense that democracies would use more severe repressive policies than intangible repression as a response to symbolic dissent. 
+Conclusion
+	I argue that democratic leaders use repression as a policy tool with the threat level of the state legitimizes the use of repressive policies. I use the SPEED dataset to break apart repression into three categories: intangible, tangible, and violent. I also break apart dissent into three categories: symbolic, mass, and violent. I provide a more nuanced look at the dissent-repression nexus not only by looking at a disaggregated form of repression and dissent, but also looking at exclusively democracies and looking at the memory of dissent as opposed to exclusively contemporaneous dissent. 
+	I find that democracies respond with all types of repression as a response to symbolic dissent and political violence, and do not respond to mass dissent with repression. I think this finding is explained by looking at the visibility of state actions. Mass dissent is a very visible event, especially when it is persistent and large-scale. Therefore, repressing it is very visible to the public and poses high costs in terms of democratic legitimacy for infringing upon rights of expression promised by democratic states. Symbolic dissent, however, is possible to repress with relatively few people noticing via intangible repression. I leave it up to future avenues of work to understand why symbolic dissent begets tangible and violent repression. I also find that democracies response to political violence with all types of repression as it grows in memory. This is because it poses the greatest threat to security of the state and legitimizes the use of repression.  
+Appendix
+Table A1: Dissent Memory and Intangible Repression
+	M1	M2	M3	M4
+	DV: Intangible Repression
+Symb. Dissent Memory	4.453*			
+	(0.589)			
+Mass Dissent Memory		1.647		
+		(0.910)		
+Political Violence Memory			3.598*	
+			(0.448)	
+Total Dissent Memory				4.178*
+				(0.466)
+War	0.254*	0.355*	0.270*	0.249*
+	(0.0741)	(0.0723)	(0.0734)	(0.0736)
+Urban Population	1.73e-08*	7.80e-09	1.35e-08*	1.45e-08*
+	(5.58e-09)	(6.20e-09)	(5.24e-09)	(5.20e-09)
+Total Population	-4.53e-09*	-2.56e-09	-4.49e-09*	-4.25e-09*
+	(1.96e-09)	(2.13e-09)	(1.82e-09)	(1.84e-09)
+Logged GDP Per Capita	-0.0315	0.297	-0.0847	-0.114
+	(0.158)	(0.192)	(0.146)	(0.144)
+Time	0.00127	0.00129	-0.00107	-0.000690
+	(0.00511)	(0.00520)	(0.00520)	(0.00515)
+Time Squared	-0.00000246	0.000000979	-0.000000371	-0.000000639
+	(0.0000136)	(0.0000137)	(0.0000138)	(0.0000137)
+Time Cubed	-1.23e-09	-6.48e-09	-9.15e-10	-6.91e-10
+	(1.10e-08)	(1.11e-08)	(1.12e-08)	(1.11e-08)
+Constant	-5.444*	-8.126*	-4.486*	-4.398*
+	(1.339)	(1.587)	(1.266)	(1.244)
+Observations	27672	27672	27672	27672
+Standard errors in parentheses
+* p < .05
+
+
+ 
+Table A2: Dissent Memory and Tangible Repression
+	M5	M6	M7	M8
+	Tangible Repression
+Symb. Dissent Memory	4.404*			
+	(0.465)			
+Mass Dissent Memory		0.658		
+		(0.678)		
+Political Violence Memory			3.631*	
+			(0.331)	
+Total Dissent Memory				3.970*
+				(0.363)
+War	0.317*	0.398*	0.296*	0.298*
+	(0.0638)	(0.0626)	(0.0640)	(0.0637)
+Urban Population	2.45e-09	-1.15e-08*	-2.56e-09	3.09e-10
+	(4.76e-09)	(5.39e-09)	(4.86e-09)	(4.60e-09)
+Total Population	-7.49e-10	2.62e-09	-4.83e-10	-7.19e-10
+	(1.65e-09)	(1.88e-09)	(1.67e-09)	(1.59e-09)
+Logged GDP Per Capita	0.0494	0.305	-0.0163	-0.0196
+	(0.129)	(0.159)	(0.124)	(0.120)
+Time	0.0120*	0.0125*	0.00927*	0.00957*
+	(0.00386)	(0.00397)	(0.00393)	(0.00388)
+Time Squared	-0.0000288*	-0.0000264*	-0.0000263*	-0.0000257*
+	(0.0000100)	(0.0000102)	(0.0000102)	(0.0000101)
+Time Cubed	2.06e-08*	1.63e-08*	2.12e-08*	2.00e-08*
+	(7.98e-09)	(8.05e-09)	(8.10e-09)	(8.02e-09)
+Constant	-6.543*	-8.729*	-5.484*	-5.577*
+	(1.065)	(1.271)	(1.036)	(1.010)
+Observations	27672	27672	27672	27672
+Standard errors in parentheses
+* p < .05
+
+
+ 
+Table A3: Dissent Memory and Violent Repression
+	M9	M10	M11	M12
+	Violent Repression
+Symb. Dissent Memory	4.884*			
+	(0.444)			
+Mass Dissent Memory		1.272		
+		(0.715)		
+Political Violence Memory			4.588*	
+			(0.317)	
+Total Dissent Memory				4.809*
+				(0.341)
+War	0.299*	0.436*	0.242*	0.253*
+	(0.0637)	(0.0614)	(0.0646)	(0.0642)
+Urban Population	1.49e-08*	9.58e-10	9.78e-09*	1.21e-08*
+	(4.94e-09)	(5.31e-09)	(4.49e-09)	(4.58e-09)
+Total Population	-4.20e-09*	-1.15e-09	-3.94e-09*	-3.95e-09*
+	(1.72e-09)	(1.85e-09)	(1.56e-09)	(1.61e-09)
+Logged GDP Per Capita	-0.445*	-0.192	-0.510*	-0.517*
+	(0.124)	(0.144)	(0.109)	(0.112)
+Time	0.000120	-0.000105	-0.00291	-0.00216
+	(0.00369)	(0.00376)	(0.00376)	(0.00371)
+Time Squared	0.00000545	0.0000117	0.00000703	0.00000711
+	(0.00000982)	(0.00000988)	(0.00000997)	(0.00000988)
+Time Cubed	-8.18e-09	-1.59e-08*	-6.11e-09	-7.09e-09
+	(7.96e-09)	(7.96e-09)	(8.08e-09)	(8.01e-09)
+Constant	-1.427	-3.504*	-0.237	-0.423
+	(0.988)	(1.128)	(0.891)	(0.910)
+Observations	27672	27672	27672	27672
+Standard errors in parentheses
+* p < .05
+
+ 
+References
+Baker, Peter. 2015. “In Debate Over Patriot Act, Lawmakers Weigh Risks vs. Liberty.” The New York Times. https://www.nytimes.com/2015/06/02/us/politics/in-debate-over-patriot-act-lawmakers-weigh-risks-vs-liberty.html (April 8, 2018).
+Bloch-Elkon, Yaeli. 2011. “The Polls—Trends: Public Perceptions and the Threat of International Terrorism after 9/11.” Public Opinion Quarterly 75(2): 366–92.
+Breeden, Aurelien. 2016. “France Weighs Limits of Liberty, Equality and Citizenship.” The New York Times. https://www.nytimes.com/interactive/2016/02/16/world/europe/france-constitution-new-laws.html, https://www.nytimes.com/interactive/2016/02/16/world/europe/france-constitution-new-laws.html (April 8, 2018).
+Bueno de Mesquita, Bruce, Alastair Smith, Randolph M. Siverson, and James D. Morrow. 2003. The Logic of Political Survival. Cambridge: MIT Press.
+Carter, David B., and Curtis S. Signorino. 2010. “Back to the Future: Modeling Time Dependence in Binary Data.” Political Analysis 18(3): 271–92.
+Dahl, Robert A. 1989. Democracy and Its Critics /. New Haven: Yale University Press.
+Danneman, Nathan, and Emily Hencken Ritter. 2014. “Contagious Rebellion and Preemptive Repression.” Journal of Conflict Resolution 58(2): 254–79.
+Davenport, Christian. 1995. “Multi-Dimensional Threat Perception and State Repression: An Inquiry into Why States Apply Negative Sanctions.” American Journal of Political Science 39(3): 683–713.
+———. 1996. “The Weight of the Past: Exploring Lagged Determinants of Political Repression.” Political Research Quarterly 49(2): 377–403.
+———. 1999. “Human Rights and the Democratic Proposition.” Journal of Conflict Resolution 43(1): 92–116.
+———. 2007. “State Repression and Political Order.” Annual Review of Political Science 10(1): 1–23.
+Davenport, Christian, and David A. Armstrong. 2004. “Democracy and the Violation of Human Rights: A Statistical Analysis from 1976 to 1996.” American Journal of Political Science 48(3): 538–54.
+Davis, Darren W., and Brian D. Silver. 2004. “Civil Liberties vs. Security: Public Opinion in the Context of the Terrorist Attacks on America.” American Journal of Political Science 48(1): 28–46.
+Finseraas, Henning, and Ola Listhaug. 2013. “It Can Happen Here: The Impact of the Mumbai Terror Attacks on Public Opinion in Western Europe.” Public Choice 156(1/2): 213–28.
+Francisco, Ronald A. 1995. “The Relationship between Coercion and Protest: An Empirical Evaluation in Three Coercive States.” The Journal of Conflict Resolution 39(2): 263–82.
+———. 1996. “Coercion and Protest: An Empirical Test in Two Democratic States.” American Journal of Political Science 40(4): 1179–1204.
+Franklin, James C. 2008. “Shame on You: The Impact of Human Rights Criticism on Political Repression in Latin America.” International Studies Quarterly 52(1): 187–211.
+Gelpi, Christopher, and Joseph M. Grieco. 2015. “Competency Costs in Foreign Affairs: Presidential Performance in International Conflicts and Domestic Legislative Success, 1953–2001.” American Journal of Political Science 59(2): 440–56.
+Gerschewski, Johannes. 2013. “The Three Pillars of Stability: Legitimation, Repression, and Co-Optation in Autocratic Regimes.” Democratization 20(1): 13–38.
+Gibney, Mark et al. 2018. “The Political Terror Scale.” ht�tp://www.polit�ic�al�ter�rorscale.org (March 31, 2019).
+Haggard, Stephan, and Robert R. Kaufman. 2016. Dictators and Democrats: Masses, Elites, and Regime Change /. Princeton: Princeton University Press.
+Henderson, Conway W. 1991. “Conditions Affecting the Use of Political Repression.” Journal of Conflict Resolution 35(1): 120–42.
+———. 1993. “Population Pressures and Political Repression.” Social Science Quarterly (University of Texas Press) 74(2): 322–33.
+Lichbach, Mark Irving. 1987. “Deterrence or Escalation? The Puzzle of Aggregate Studies of Repression and Dissent.” The Journal of Conflict Resolution 31(2): 266–97.
+Mitchell, Neil J., and James M. McCormick. 1988. “Economic and Political Explanations of Human Rights Violations.” World Politics 40(4): 476–98.
+Mondak, Jeffery J., and Jon Hurwitz. 2012. “Examining the Terror Exception Terrorism and Commitments to Civil Liberties.” Public Opinion Quarterly 76(2): 193–213.
+Moore, Will H. 1998. “Repression and Dissent: Substitution, Context, and Timing.” American Journal of Political Science 42(3): 851–73.
+———. 2000. “The Repression of Dissent: A Substitution Model of Government Coercion.” The Journal of Conflict Resolution 44(1): 107–27.
+Nardulli, Peter F., Scott L. Althaus, and Matthew Hayes. 2015. “A Progressive Supervised-Learning Approach to Generating Rich Civil Strife Data:” Sociological Methodology. https://journals.sagepub.com/doi/pdf/10.1177/0081175015581378 (November 20, 2018).
+Ober, Josiah. 2012. “Democracy’s Dignity.” The American Political Science Review 106(4): 827–46.
+Poe, Steven C., and C. Neal Tate. 1994. “Repression of Human Rights to Personal Integrity in the 1980s: A Global Analysis.” American Political Science Review 88(4): 853–72.
+Regan, Patrick M., and Errol A. Henderson. 2002. “Democracy, Threats and Political Repression in Developing Countries: Are Democracies Internally Less Violent?” Third World Quarterly 23(1): 119–36.
+Sarkees, Meredith Reid, Meredith Sarkees, and Frank Wayman. 2010. Resort to War, 1816-2007. Washington: CQ Press.
+Smith, Alastair. 1998. “International Crises and Domestic Politics.” The American Political Science Review 92(3): 623–38.
+Stohl, Michael, David Carleton, George Lopez, and Stephen Samuels. 1986. “State Violation of Human Rights: Issues and Problems of Measurement.” Human Rights Quarterly 8(4): 592–606.
+Taylor, Charles, and David Jodice. 1983. World Handbook of Political and Social Indicators III. New Haven: Yale University Press.
+The Next Generation of the Penn World Table. 2013. Cambridge, Mass: National Bureau of Economic Research.
+Young, Joseph K. 2013. “Repression, Dissent, and the Onset of Civil War.” Political Research Quarterly 66(3): 516–32.
+
