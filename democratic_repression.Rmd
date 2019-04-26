@@ -14,57 +14,45 @@ library(lubridate)
 ```{r, include = F}
 #Load in the dataset
 speed_full <- read.csv("C:/Users/Christopher/Documents/Data/speed/ssp_public.csv")
-speed_full <- data.table::as.data.table(speed_full)
+speed_full <- as_tibble(speed_full) %>% 
+              janitor::clean_names()
 
-#What is the class of the date variables? 
-class(speed_full$month)
-table(speed_full$month, useNA = "ifany") #there are 67 missing months, I'll delete those for simplicity
-class(speed_full$year)
-table(speed_full$year, useNA = "ifany")
-
+#add country codes
+speed_full$country
+speed_full <- speed_full %>% 
+  mutate(cowcode = countrycode::countrycode(country, "country.name", "cown"),
+         cowname = countrycode::countrycode(cowcode, "cown", "cowc"),
+         start_date = as.Date(jul_start_date, origin = "1944-12-31"), #make the starting date formatted in readable way
+         end_date = as.Date(jul_end_date, origin = "1944-12-31")) %>% #make the ending date formatted in a readable way 
+         select(year, month, day, start_date, end_date, day_span, everything())
+  
 #Delete missing months 
-speed_nonmissing_date <- speed_full[!is.na(speed_full$month),]
-table(speed_nonmissing_date$month, useNA = "ifany")
+speed_nonmissing_date <- speed_full %>% 
+                         filter(!is.na(start_date),
+                                !is.na(end_date), #remove those without starting or ending dates -- only 67 observations  
+                                !is.na(cowcode)) %>%  #remove missing values for identifying a country. These would not fit into country-month unit of analysis. 
+                         select(everything())
 
-as.character(speed_nonmissing_date$year)
-speed_nonmissing_date$year_month <- paste0(as.character(speed_nonmissing_date$year), "-", as.character(speed_nonmissing_date$month))
-speed_nonmissing_date$year_month
-
-names(speed_nonmissing_date) <-tolower(names(speed_nonmissing_date))
-
+                          
 #Ultimately my analyses will be in country-month units so I need to generate a year-month variable to group on later. I also need to have a year-month format for both start and end dates, because I have events that span several months. I will later assume the an event is equally active across all months it is active because I ultimately use a binary DV and that assumption is therefore not impactful. I care, therefore, IF an event occurred in a given month, not about its intensity. 
 
-speed_nonmissing_date$start <- as.Date(speed_nonmissing_date$jul_start_date, origin = "1945-01-01") #making the julian start date 
-
-sum(is.na(speed_nonmissing_date$start)) #check for missing values 
-
-speed_nonmissing_date$start_ym <- stringr::str_replace(speed_nonmissing_date$start, "\\-\\d{2}$", "")
+speed_nonmissing_date$start_ym <- stringr::str_replace(as.character(speed_nonmissing_date$start_date), "\\-\\d{2}$", "")
 #speed_nonmissing_date$start_ym #this is a string for the year-month of the start of an event
 
-speed_nonmissing_date$start_year_month <- zoo::as.yearmon(speed_nonmissing_date$start_ym)
-class(speed_nonmissing_date$start_year_month) #class is yearmon for the string created above
+speed_nonmissing_date$start_year_month <- zoo::as.yearmon(speed_nonmissing_date$start_ym) #this is a yearmon class variable of the string above
 
-speed_nonmissing_date$end <- as.Date(speed_nonmissing_date$jul_end_date, origin = "1945-01-01") #making the julian start date 
-#speed_nonmissing_date$end
-sum(is.na(speed_nonmissing_date$end)) #check for missing values 
 
-speed_nonmissing_date$end_ym <- stringr::str_replace(speed_nonmissing_date$end, "\\-\\d{2}$", "")
-#speed_nonmissing_date$end_ym #create a string for the year-month of the end of an event
+speed_nonmissing_date$end_ym <- stringr::str_replace(as.character(speed_nonmissing_date$end_date), "\\-\\d{2}$", "")
 
-speed_nonmissing_date$end_year_month <- zoo::as.yearmon(speed_nonmissing_date$end_ym)
-class(speed_nonmissing_date$end_year_month) #class is yearmon of the string created above for end year-month
+speed_nonmissing_date$end_year_month <- zoo::as.yearmon(speed_nonmissing_date$end_ym) #class yearmon of zoo 
 
-speed_nonmissing_date$start_month <- month(speed_nonmissing_date$start) #extract start month from start date
-#speed_nonmissing_date$start_month
+speed_nonmissing_date$start_month <- month(speed_nonmissing_date$start_date) #extract start month from start date
 
-speed_nonmissing_date$start_year <- year(speed_nonmissing_date$start) #extract start year from start date
-#speed_nonmissing_date$start_year
+speed_nonmissing_date$start_year <- year(speed_nonmissing_date$start_date) #extract start year from start date
 
-speed_nonmissing_date$end_month <- month(speed_nonmissing_date$end) #extract end month from end date 
-#speed_nonmissing_date$end_month
+speed_nonmissing_date$end_month <- month(speed_nonmissing_date$end_date) #extract end month from end date 
 
-speed_nonmissing_date$end_year <- year(speed_nonmissing_date$end) #extract end year from end date 
-#speed_nonmissing_date$end_year
+speed_nonmissing_date$end_year <- year(speed_nonmissing_date$end_date) #extract end year from end date 
 
 #create a duration in months 
 speed_nonmissing_date$duration <- ((speed_nonmissing_date$end_year_month - speed_nonmissing_date$start_year_month) *12) + 1 #If you just subtract the dates then it gives it to you as a function of a year, each month being 1/12th of a year. Multiplying it by 12 gives me the number of months, and add one because a minimum duration is the 1 month that it existed. 
@@ -87,51 +75,100 @@ The variables that I care about are the following:
 
   
 ```{r, include=F}
-# speed_relevant <- data.frame(
-#   start_year_month = rep(speed_nonmissing_date$start_year_month, speed_nonmissing_date$duration)
-#   end_year_month = rep(speed_nonmissing_date$end_year_month, speed_nonmissing_date$duration)
-#   duration = rep(speed_nonmissing_date$duration, speed_nonmissing_date$duration)
-#   cowcode = rep(speed_nonmissing_date$cowcode, speed_nonmissing_date$duration)
-#   pol_express = rep(speed_nonmissing_date$pol_express, speed_nonmissing_date$duration)
-#   mass_express = rep(speed_nonmissing_date$mass_express, speed_nonmissing_date$duration)
-#   pol_viol = rep(speed_nonmissing_date$pol_viol, speed_nonmissing_date$duration)
-#   intang_rep = rep(speed_nonmissing_date$intang_rep, speed_nonmissing_date$duration)
-#   st_repress = rep(speed_nonmissing_date$st_repress, speed_nonmissing_date$duration)
-#   stat_viol = rep(speed_nonmissing_date$stat_viol, speed_nonmissing_date$duration)
-#     )
-
-speed_relevant <- speed_nonmissing_date %>% select(
-    start_year_month, end_year_month, eventid, duration, cowcode, country, pol_express, mass_express, pol_viol, intang_rep, st_repress, stat_viol
-)
+#grab the relevant variabels for this analysis 
+speed_relevant <- speed_nonmissing_date %>% 
+                  select(start_year_month, 
+                         end_year_month, 
+                         eventid, duration, 
+                         cowcode, 
+                         country, 
+                         cowname, 
+                         pol_express, 
+                         mass_express, 
+                         pol_viol, 
+                         intang_rep, 
+                         st_repress, 
+                         stat_viol
+                         )
 
 speed_relevant_expand <- reshape::untable(speed_relevant, num = speed_relevant$duration)
 
-# speed_relevant_expand$seq <- speed_relevant_expand %>% 
-#     group_by(eventid) %>% 
-#     mutate(seq = row_number())
+speed_relevant_expand <- speed_relevant_expand %>% 
+                         group_by(eventid) %>% 
+                         mutate(seq = seq_along(duration), #a count of how many months the event lasts
+                                month_increment = seq/12, #the count divided by 12
+                                mdate = (start_year_month - 1/12) + month_increment, #monthly date for each month an event was active
+                                ) %>% 
+                         select(seq, 
+                                duration, 
+                                eventid, 
+                                month_increment, 
+                                mdate, 
+                                start_year_month, 
+                                end_year_month,  
+                                everything())
 
-library(data.table)
+speed_relevant_expand$year_month <- zoo::as.yearmon(speed_relevant_expand$mdate)
 
-speed_relevant_expand[, seq := seq_len(.N), by = eventid]
-speed_relevant_expand[, seq := rowid(eventid)]
-speed_relevant_expand[, month_increment := seq/12]
-
-speed_relevant_expand[, year_month := ((start_year_month - 1/12) + month_increment)]
 
 speed_country_month <- speed_relevant_expand %>% 
-                        group_by(country, cowcode, year_month) %>% 
-                        summarize(mean(pol_express), mean(mass_express), mean(pol_viol), mean(intang_rep), mean(st_repress), mean(stat_viol))
-  #select(pol_express, mass_express, pol_viol, intang_rep, st_repress, stat_viol)
+                        group_by(cowcode, year_month) %>% 
+                        summarize(mean(pol_express),
+                                  mean(mass_express),
+                                  mean(pol_viol),
+                                  mean(intang_rep),
+                                  mean(st_repress),
+                                  mean(stat_viol), 
+                                  first(cowname)) %>% 
+                        arrange(cowcode, year_month) %>% 
+                        janitor::clean_names() %>% 
+                        ungroup()
 
-speed_country_month$country <- gsub(speed_country_month$country, pattern = "^$", replacement = NA) #Make empty country cells into NA
-
-speed_country_month %>% 
-  select(country, cowcode) %>% 
-  group_by(country, cowcode)
+#the final object of the speed data is ready: speed_country_month
 ```
 
-Dissent and Repression: Regime and Temporal Differences
- When do democracies resort to repression? The literature on the dissent-repression nexus has been active for over forty years, but there are still important methodological improvements that can be made to this literature. To date, the most concrete findings are summarized in Davenport’s (2007) literature review: the law of coercive responsiveness, more murder in the middle, and the domestic democratic peace. The law of coercive responsiveness is that states are most likely to repress in response to a threat. More murder in the middle is the finding that regime types somewhere between full authoritarian and full democracy are the most violent repressors. The domestic democratic peace is threefold: democratic institutions increase the costs of state repression, democratic citizens accept democratic values of nonviolent expression and negotiating, and democracies provide alternative measures for political control. It is important to note that the domestic democratic peace only applies to states that cross a certain threshold of democratic-ness at which point they become ‘full’ democracies (Davenport 1995, 1999; Davenport and Armstrong 2004; Poe and Tate 1994; Regan and Henderson 2002). 
+```{r include=F}
+#This chunk generates the controls and merges the final dataframe together 
+
+#First, I need to get my universe of possible cases. I start with Correlates of War systemic membership dataset because it has all possible country-years available. 
+country_entry <- read.csv("http://www.correlatesofwar.org/data-sets/state-system-membership/states2016/at_download/file")
+
+country_duration <- country_entry %>% 
+                 mutate(enter_date = paste0(styear, "-", stmonth), #country started
+                        leave_date = paste0(endyear, "-", endmonth), #country ended
+                        enter = zoo::as.yearmon(enter_date), #as zoo class
+                        leave = zoo::as.yearmon(leave_date)  #as zoo class
+                        ) %>%
+                 select(cowcode = ccode, #renaming relevant variables 
+                        cowname = stateabb, 
+                        enter, 
+                        leave
+                        )
+
+country_duration <- country_duration %>% 
+                    mutate(duration = ((leave - enter) * 12 ) + 1 #number of months a country existed
+                           ) 
+
+country_expand <- reshape::untable(country_duration, num = country_duration$duration) #expand to create one row for each month a country existed
+                 
+country_month <- country_expand %>% 
+                 group_by(cowcode) %>% 
+                 mutate(seq = seq_along(duration), #count of months country existed
+                        month_increment = seq/12, #the count divided by 12
+                        mdate = (enter - 1/12) + month_increment #unformatted zoo yearmon object
+                        ) %>%   
+                 ungroup()
+
+country_month$year_month <- zoo::as.yearmon(country_month$mdate) #format the yearmon object 
+
+system_month <- country_month %>% 
+                select(cowcode,
+                       cowname,
+                       year_month) #final dataframe of all possible country_months
+```
+e and Temporal Differences
+ When do democracies resort to repression? The literature on the dissent-repression nex
+Dissent and Repression: Regimus has been active for over forty years, but there are still important methodological improvements that can be made to this literature. To date, the most concrete findings are summarized in Davenport’s (2007) literature review: the law of coercive responsiveness, more murder in the middle, and the domestic democratic peace. The law of coercive responsiveness is that states are most likely to repress in response to a threat. More murder in the middle is the finding that regime types somewhere between full authoritarian and full democracy are the most violent repressors. The domestic democratic peace is threefold: democratic institutions increase the costs of state repression, democratic citizens accept democratic values of nonviolent expression and negotiating, and democracies provide alternative measures for political control. It is important to note that the domestic democratic peace only applies to states that cross a certain threshold of democratic-ness at which point they become ‘full’ democracies (Davenport 1995, 1999; Davenport and Armstrong 2004; Poe and Tate 1994; Regan and Henderson 2002). 
 Further motivation comes from the terrorism literature. A variety of studies have shown that as democratic citizens perceive their own threat levels increasing, they offer up individual autonomy and rights in exchange for greater security offered by the state (Bloch-Elkon 2011; Davis and Silver 2004; Finseraas and Listhaug 2013; Mondak and Hurwitz 2012). Importantly, this shows that in democracies if the dissent sufficiently threatens the population at large they will accept repression if it means lower perceived threat levels. This mechanism provides legitimacy for the use of repressive policy by democratic states. 
 	I define dissent broadly: any action that is political in motivation initiated by a non-government entity with the intention of political change. In measurement, I divide dissent into three categories  that are captured through three distinct independent variables: symbolic dissent, mass dissent, and political violence. Symbolic dissent  requires no mass mobilization and can take the form of leaflets, books, films and other mediums that criticize the state. Mass dissent is nonviolent mobilization of large groups of people. Obvious examples of this include protests such as the Women’s March and other such mass protests. Political violence is the use of violence to create political change. This definition improves upon recent literature by including a broader conception of dissent and differentiating between different them. 
 	Davenport (2007, 2) defines repression as: “the actual or threatened use of physical sanctions against an individual or organization, within the territorial jurisdiction of the state, for the purpose of imposing a cost on the target as well as deterring specific activities and/or beliefs perceived to be challenging to government personnel, practices or institutions.” I expand this definition of repression in an important way: the negation of civil liberties such as freedom of speech, religion, association, gathering, and movement in nonviolent ways also constitutes repression. The literature mostly ignores this type of repression, largely due to data issues. Much of the repression datasets that exist are based on and developed around violent repression of physical integrity rights (Francisco 1996; Gibney et al. 2018; Poe and Tate 1994), or only take into account human rights violations or scores (Davenport 1999; Davenport and Armstrong 2004; Franklin 2008; Regan and Henderson 2002; Stohl et al. 1986).  I categorize repression into three types: intangible state repression, tangible state repression, and violent repression. Intangible state repression violates basic rights in a nonviolent manner such as censorship, martial law, imposing curfews, etc. Tangible state repression involves the use of state capacity to coerce citizens without using violence, detention, or the military. Violent repression uses lethal force, the military, detention, torture, or any combination of violent measures taken to coerce individuals. These definitions are provided by the Social, Political, Economic Events Database (SPEED) which is the data used in this project (Nardulli, Althaus, and Hayes 2015). 
@@ -305,7 +342,7 @@ Francisco, Ronald A. 1995. “The Relationship between Coercion and Protest: An 
 Franklin, James C. 2008. “Shame on You: The Impact of Human Rights Criticism on Political Repression in Latin America.” International Studies Quarterly 52(1): 187–211.
 Gelpi, Christopher, and Joseph M. Grieco. 2015. “Competency Costs in Foreign Affairs: Presidential Performance in International Conflicts and Domestic Legislative Success, 1953–2001.” American Journal of Political Science 59(2): 440–56.
 Gerschewski, Johannes. 2013. “The Three Pillars of Stability: Legitimation, Repression, and Co-Optation in Autocratic Regimes.” Democratization 20(1): 13–38.
-Gibney, Mark et al. 2018. “The Political Terror Scale.” ht�tp://www.polit�ic�al�ter�rorscale.org (March 31, 2019).
+Gibney, Mark et al. 2018. “The Political Terror Scale.” ht�tp://www.polit�ic�al�ter�rorscale.org (March 31, 2019).
 Haggard, Stephan, and Robert R. Kaufman. 2016. Dictators and Democrats: Masses, Elites, and Regime Change /. Princeton: Princeton University Press.
 Henderson, Conway W. 1991. “Conditions Affecting the Use of Political Repression.” Journal of Conflict Resolution 35(1): 120–42.
 ———. 1993. “Population Pressures and Political Repression.” Social Science Quarterly (University of Texas Press) 74(2): 322–33.
