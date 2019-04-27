@@ -217,19 +217,36 @@ intrastate <- intrastate %>%
                      ) %>% 
               select(cowcode, start_ym1, end_ym1, duration1, start_ym2, end_ym2, duration2, two_start, war_num)
 
-intrastate_two_start <- reshape::untable(intrastate, num = intrastate$two_start)
+intrastate_two_start <- uncount(intrastate, two_start, .remove = F) %>% 
+                        as_tibble()
 
 intrastate_pre_expand <- intrastate_two_start %>% 
               group_by(war_num, cowcode) %>% 
               mutate(seq = seq_along(two_start),
                      start = ifelse(seq == 1, start_ym1, start_ym2),
                      end = ifelse(seq == 1, end_ym1, end_ym2),
-                     duration2 = ifelse(is.na(duration2), 1, duration2))
+                     duration1_final = ifelse(seq == 1, duration1, 0),
+                     duration2 = ifelse(is.na(duration2), 1, duration2),
+                     duration2_final = ifelse(seq == 2, duration2, 0),
+                     id = paste0(cowcode, "_", war_num, "_", seq)) %>% 
+              ungroup()
               
 
-intrastate_expand_first <- reshape::untable(intrastate_pre_expand, num = intrastate_pre_expand$duration1)
+intrastate_expand_first <- intrastate_pre_expand %>% 
+                           group_by(id) %>% 
+                           uncount(duration1_final, .remove = F) %>% 
+                           mutate(time = seq_along(duration1_final), 
+                                  length = 1) %>% 
+                           select(id, duration1_final, seq, time, everything()) %>% 
+                           arrange(id)
 
-intrastate_expand <- reshape::untable(intrastate_expand_first, num = intrastate_expand_first$duration2)
+# intrastate_expand <- reshape::untable(intrastate_expand_first, num = (intrastate_expand_first$duration2_final))%>% 
+#                      select(id, duration1_final, duration2_final, war_num, cowcode, everything()) %>% 
+#                      arrange(id)
+# 
+# intrastate_expand_test <- if(two_start == 1) {
+#   reshape::untable(intrastate_pre_expand, num = intrastate_pre_expand$duration1_final)
+# }
 ```
 e and Temporal Differences
  When do democracies resort to repression? The literature on the dissent-repression nex
