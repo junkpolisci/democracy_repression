@@ -164,7 +164,72 @@ country_month$year_month <- zoo::as.yearmon(country_month$mdate) #format the yea
 system_month <- country_month %>% 
                 select(cowcode,
                        cowname,
-                       year_month) #final dataframe of all possible country_months
+                       year_month) %>% #final dataframe of all possible country_months
+                filter(year_month >= "Jan 1944") #speed data starts after 1944
+
+intrastate <- read.csv("http://www.correlatesofwar.org/data-sets/COW-war/intra-state-war-data-v4-1/at_download/file") %>% 
+              janitor::clean_names()
+
+intrastate <- intrastate %>% 
+               mutate(start_year1 = ifelse(start_year1 < 0, NA, start_year1),
+                      start_month1 = ifelse(start_month1 < 0, NA, start_month1),
+                      start_year2 = ifelse(start_year2 < 0, NA, start_year2),
+                      start_month2 = ifelse(start_month2 < 0, NA, start_month2),
+                      end_year1 = ifelse(end_year1 < 0, NA, end_year1),
+                      end_month1 = ifelse(end_month1 < 0, NA, end_month1),
+                      end_year2 = ifelse(end_year2 < 0, NA, end_year2),
+                      end_month2 = ifelse(end_month2 < 0, NA, end_month2))
+
+intrastate <- intrastate %>% 
+              mutate(ccode = ifelse(ccode_a > 0, ccode_a, ccode_b), #one country code for each intrastate war
+                     cowcode = ifelse(ccode > 0, ccode, NA), #no countries were belligerents if there is not a cowcode
+                     start1 = paste0(start_year1, "-", start_month1), #first start yearmonth
+                     end1 = paste0(end_year1, "-", end_month1), #first end yearmonth
+                     start2 = paste0(start_year2, "-", start_month2),
+                     end2 = paste0(end_year2, "-", end_month2)
+                     ) %>% 
+              select(ccode_a, ccode_b, cowcode, start1, end1, start2, end2, everything()
+                     ) %>% 
+              arrange(war_num)
+
+
+intrastate <- intrastate %>% 
+              mutate(start1 = ifelse(stringr::str_detect(start1, pattern = "NA"), paste0(start_year1, "-", 12), start1),
+                     
+                     start2 =ifelse(stringr::str_detect(start2, pattern = "NA"), paste0(start_year2, "-", 12), start2),
+                     
+                     end1 = ifelse(stringr::str_detect(end1, pattern = "NA"), paste0(2016, "-", 12), end1),
+                     
+                     end2 = ifelse(stringr::str_detect(end2, pattern = "NA"), paste0(2016, "-", 12), end2)
+              )
+
+intrastate$start_ym1 <- zoo::as.yearmon(intrastate$start1)
+intrastate$start_ym2 <- zoo::as.yearmon(intrastate$start2)
+intrastate$end_ym1 <- zoo::as.yearmon(intrastate$end1)
+intrastate$end_ym2 <- zoo::as.yearmon(intrastate$end2)
+
+intrastate <- intrastate %>% 
+              filter(start_ym1 > "Jan 1944") %>% 
+              mutate(intrastate = 1,
+                     duration1 = ((end_ym1 - start_ym1) * 12) + 1,
+                     duration2 = ((end_ym2 - start_ym2) * 12) + 1,
+                     two_start = ifelse(!is.na(start_ym1 & start_ym2), 2, 1)
+                     ) %>% 
+              select(cowcode, start_ym1, end_ym1, duration1, start_ym2, end_ym2, duration2, two_start, war_num)
+
+intrastate_two_start <- reshape::untable(intrastate, num = intrastate$two_start)
+
+intrastate_pre_expand <- intrastate_two_start %>% 
+              group_by(war_num, cowcode) %>% 
+              mutate(seq = seq_along(two_start),
+                     start = ifelse(seq == 1, start_ym1, start_ym2),
+                     end = ifelse(seq == 1, end_ym1, end_ym2),
+                     duration2 = ifelse(is.na(duration2), 1, duration2))
+              
+
+intrastate_expand_first <- reshape::untable(intrastate_pre_expand, num = intrastate_pre_expand$duration1)
+
+intrastate_expand <- reshape::untable(intrastate_expand_first, num = intrastate_expand_first$duration2)
 ```
 e and Temporal Differences
  When do democracies resort to repression? The literature on the dissent-repression nex
