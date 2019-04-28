@@ -215,7 +215,7 @@ intrastate <- intrastate %>%
                      duration2 = ((end_ym2 - start_ym2) * 12) + 1,
                      two_start = ifelse(!is.na(start_ym1 & start_ym2), 2, 1)
                      ) %>% 
-              select(cowcode, start_ym1, end_ym1, duration1, start_ym2, end_ym2, duration2, two_start, war_num)
+              select(cowcode, start_ym1, end_ym1, duration1, start_ym2, end_ym2, duration2, two_start, war_num, intrastate)
 
 intrastate_two_start <- uncount(intrastate, two_start, .remove = F) %>% 
                         as_tibble()
@@ -225,28 +225,54 @@ intrastate_pre_expand <- intrastate_two_start %>%
               mutate(seq = seq_along(two_start),
                      start = ifelse(seq == 1, start_ym1, start_ym2),
                      end = ifelse(seq == 1, end_ym1, end_ym2),
-                     duration1_final = ifelse(seq == 1, duration1, 0),
+                     duration1_final = ifelse(seq == 1, duration1, 1),
                      duration2 = ifelse(is.na(duration2), 1, duration2),
-                     duration2_final = ifelse(seq == 2, duration2, 0),
+                     duration2_final = ifelse(seq == 2, duration2, 1),
                      id = paste0(cowcode, "_", war_num, "_", seq)) %>% 
-              ungroup()
+              filter(seq < 3) %>% 
+              ungroup() %>% 
+              as_tibble()
               
 
 intrastate_expand_first <- intrastate_pre_expand %>% 
                            group_by(id) %>% 
-                           uncount(duration1_final, .remove = F) %>% 
-                           mutate(time = seq_along(duration1_final), 
-                                  length = 1) %>% 
-                           select(id, duration1_final, seq, time, everything()) %>% 
-                           arrange(id)
+                           uncount(round(duration1_final, 0), .remove = F) %>% #this uses the round function because the some of the numbers were '125.' instead of '125', for example. This created a problem, and round fixed it by removing the decimal. 
+                           mutate(time1 = seq_along(duration1_final),
+                                  correct1 = ifelse(round(max(time1), 0) == round(duration1_final, 0), 1, 0)) %>% 
+                           select(id, duration1_final, seq, time1, everything()) %>% 
+                           arrange(id) %>% 
+                           ungroup() %>% 
+                           as_tibble()
 
-# intrastate_expand <- reshape::untable(intrastate_expand_first, num = (intrastate_expand_first$duration2_final))%>% 
-#                      select(id, duration1_final, duration2_final, war_num, cowcode, everything()) %>% 
-#                      arrange(id)
-# 
-# intrastate_expand_test <- if(two_start == 1) {
-#   reshape::untable(intrastate_pre_expand, num = intrastate_pre_expand$duration1_final)
-# }
+intrastate_expand <- intrastate_expand_first %>% 
+                     group_by(id) %>% 
+                     uncount(round(duration2_final, 0), .remove = F) %>% 
+                     mutate(time2 = seq_along(duration2_final),
+                            correct2 = ifelse(max(time2) == max(duration2_final), 1, 0)) %>% 
+                     select(id, duration2_final, time2, duration1_final, time1, everything()) %>% 
+                     arrange(id)
+                     
+intrastate_expand <- intrastate_expand %>% 
+                     mutate(mdate1 = ifelse(seq == 1, (start_ym1 - 1/12) + time1/12, NA),
+                            mdate2 = ifelse(seq == 2, (start_ym2 - 1/12) + time2/12, NA)) %>% 
+                     select(id, mdate1, start_ym1, end_ym1, mdate2, start_ym2, end_ym2, seq, intrastate, everything())
+
+intrastate_expand$year_month1 <- zoo::as.yearmon(intrastate_expand$mdate1)
+intrastate_expand$year_month2 <- zoo::as.yearmon(intrastate_expand$mdate2)
+
+
+
+intrastate_expand <- intrastate_expand %>% 
+                     mutate(year_month = ifelse(!is.na(year_month1), year_month1, year_month2))
+intrastate_expand$year_month <- zoo::as.yearmon(intrastate_expand$year_month)
+
+intrastate_expand <- intrastate_expand %>% 
+                     select(id, mdate1, mdate2, year_month, start_ym1, end_ym1, start_ym2, end_ym2, cowcode, intrastate)
+                     
+analysis <- left_join(system_month, intrastate_expand) %>%
+            select(cowcode, cowname, intrastate, year_month) %>% 
+            mutate(intrastate = (ifelse(!is.na(intrastate), intrastate, 0)))
+
 ```
 e and Temporal Differences
  When do democracies resort to repression? The literature on the dissent-repression nex
