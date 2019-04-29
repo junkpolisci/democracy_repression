@@ -11,7 +11,7 @@ library(tidyverse)
 library(lubridate)
 ```
 
-```{r, include = F}
+```{r speed_setup, include = F, name}
 #Load in the dataset
 speed_full <- read.csv("C:/Users/Christopher/Documents/Data/speed/ssp_public.csv")
 speed_full <- as_tibble(speed_full) %>% 
@@ -74,7 +74,7 @@ The variables that I care about are the following:
   
 
   
-```{r, include=F}
+```{r speed_expand, include=F}
 #grab the relevant variabels for this analysis 
 speed_relevant <- speed_nonmissing_date %>% 
                   select(start_year_month, 
@@ -97,7 +97,7 @@ speed_relevant_expand <- speed_relevant_expand %>%
                          group_by(eventid) %>% 
                          mutate(seq = seq_along(duration), #a count of how many months the event lasts
                                 month_increment = seq/12, #the count divided by 12
-                                mdate = (start_year_month - 1/12) + month_increment, #monthly date for each month an event was active
+                                mdate = (start_year_month - 1/12) + month_increment #monthly date for each month an event was active
                                 ) %>% 
                          select(seq, 
                                 duration, 
@@ -127,7 +127,7 @@ speed_country_month <- speed_relevant_expand %>%
 #the final object of the speed data is ready: speed_country_month
 ```
 
-```{r include=F}
+```{r system_setup, include=F}
 #This chunk generates the controls and merges the final dataframe together 
 
 #First, I need to get my universe of possible cases. I start with Correlates of War systemic membership dataset because it has all possible country-years available. 
@@ -166,7 +166,11 @@ system_month <- country_month %>%
                        cowname,
                        year_month) %>% #final dataframe of all possible country_months
                 filter(year_month >= "Jan 1944") #speed data starts after 1944
+```
 
+
+
+```{r intrastate_control, include=F}
 intrastate <- read.csv("http://www.correlatesofwar.org/data-sets/COW-war/intra-state-war-data-v4-1/at_download/file") %>% 
               janitor::clean_names()
 
@@ -272,8 +276,136 @@ intrastate_expand <- intrastate_expand %>%
 analysis <- left_join(system_month, intrastate_expand) %>%
             select(cowcode, cowname, intrastate, year_month) %>% 
             mutate(intrastate = (ifelse(!is.na(intrastate), intrastate, 0)))
-
 ```
+
+```{r interstate_control, include = F}
+interstate <- read.csv("http://correlatesofwar.org/data-sets/COW-war/inter-state-war-data/at_download/file") %>% 
+              janitor::clean_names() %>% 
+              mutate(cowcode = ccode, 
+                     start_ym1 = ifelse(start_year1 > 0 & start_month1 > 0, 
+                                        paste0(start_year1, "-", start_month1),
+                                        NA),
+                     start_ym2 = ifelse(start_year2 > 0 & start_month2 > 0, 
+                                        paste0(start_year2, "-", start_month2),
+                                        NA),
+                     end_ym1 = ifelse(end_year1 > 0 & end_month1 > 0, 
+                                        paste0(end_year1, "-", end_month1),
+                                        NA), 
+                     end_ym2 = ifelse(end_year2 > 0 & end_month2 > 0, 
+                                        paste0(end_year2, "-", end_month2),
+                                        NA), 
+                     twostart = round(ifelse(!is.na(start_ym1) & !is.na(start_ym2), 
+                                       2,
+                                       1), 0)) %>% 
+              select(cowcode, 
+                     start_ym1, 
+                     start_year1, 
+                     start_month1, 
+                     end_ym1, 
+                     end_year1, 
+                     end_month1,
+                     start_ym2, 
+                     start_year2, 
+                     start_month2, 
+                     end_ym2, 
+                     end_year2, 
+                     end_month2,
+                     twostart,
+                     everything())
+
+#change the starting and ending year-month dates to yearmon 
+interstate$start_ym1 <- zoo::as.yearmon(interstate$start_ym1)
+interstate$start_ym2 <- zoo::as.yearmon(interstate$start_ym2)
+interstate$end_ym1 <- zoo::as.yearmon(interstate$end_ym1)
+interstate$end_ym2 <- zoo::as.yearmon(interstate$end_ym2)
+
+
+interstate_twostart <- interstate %>% 
+                       uncount(twostart, .remove = F) %>%
+                       group_by(war_num, cowcode) %>% 
+                       mutate(seq = seq_along(twostart),
+                              id = paste0(cowcode, "_", war_num, "_", seq), 
+                              duration1 = ((end_ym1 - start_ym1) * 12) + 1,
+                              duration2 = ((end_ym2 - start_ym2) * 12) + 1, 
+                              duration1_final = round(ifelse(seq == 1, 
+                                                             duration1,
+                                                             1), 
+                                                      0),
+                              duration2_final = round(ifelse(seq == 2, 
+                                                             duration2, 
+                                                             1), 
+                                                      0),
+                              duration2_final = ifelse(is.na(duration2_final), 
+                                                       1, 
+                                                       duration2_final)
+                              ) %>% 
+                       select(id,
+                              duration1,
+                              duration1_final,
+                              duration2, 
+                              duration2_final,
+                              seq,
+                              everything())
+
+interstate_expand_first <- interstate_twostart %>% 
+                           group_by(id) %>% 
+                           uncount(duration1_final, .remove = F) %>% 
+                           mutate(time1 = seq_along(duration1_final)) %>% 
+                           select(id,
+                                  time1,
+                                  duration1_final,
+                                  seq, 
+                                  everything()) %>% 
+                           ungroup()
+
+interstate_expand <- interstate_expand_first %>% 
+                     group_by(id) %>% 
+                     uncount(duration2_final, .remove = F) %>% 
+                     mutate(time2 = seq_along(duration2_final),
+                            time = ifelse(seq == 1, time1, time2), 
+                            start_ym = ifelse(seq == 1, 
+                                              start_ym1, 
+                                              start_ym2),
+                            end_ym = ifelse(seq == 1, 
+                                            end_ym1,
+                                            end_ym2),
+                            mdate = (start_ym - 1/12) + time/12) %>% 
+                     ungroup() %>% 
+                     select(id, 
+                            time1, 
+                            duration1_final, 
+                            time2, 
+                            duration2_final, 
+                            time, 
+                            seq,
+                            start_ym, 
+                            mdate,
+                            end_ym,
+                            start_ym1,
+                            end_ym1, 
+                            start_ym2, 
+                            end_ym2,
+                            everything())
+
+interstate_expand$start_ym <- zoo::as.yearmon(interstate_expand$start_ym)
+interstate_expand$end_ym <- zoo::as.yearmon(interstate_expand$end_ym)
+interstate_expand$year_month <- zoo::as.yearmon(interstate_expand$mdate)
+
+interstate_final <- interstate_expand %>% 
+                    mutate(interstate = 1) %>% 
+                    filter(your_month >= "Jan 1944") %>% 
+                    select(cowcode, year_month, interstate)
+
+analysis <- left_join(analysis, interstate_final) %>% 
+            mutate(interstate = ifelse(!is.na(interstate),
+                                       interstate,
+                                       0),
+                   war = ifelse((intrastate == 1 | interstate == 1),
+                                1,
+                                0)
+                   )
+```
+
 e and Temporal Differences
  When do democracies resort to repression? The literature on the dissent-repression nex
 Dissent and Repression: Regimus has been active for over forty years, but there are still important methodological improvements that can be made to this literature. To date, the most concrete findings are summarized in Davenport’s (2007) literature review: the law of coercive responsiveness, more murder in the middle, and the domestic democratic peace. The law of coercive responsiveness is that states are most likely to repress in response to a threat. More murder in the middle is the finding that regime types somewhere between full authoritarian and full democracy are the most violent repressors. The domestic democratic peace is threefold: democratic institutions increase the costs of state repression, democratic citizens accept democratic values of nonviolent expression and negotiating, and democracies provide alternative measures for political control. It is important to note that the domestic democratic peace only applies to states that cross a certain threshold of democratic-ness at which point they become ‘full’ democracies (Davenport 1995, 1999; Davenport and Armstrong 2004; Poe and Tate 1994; Regan and Henderson 2002). 
@@ -315,7 +447,12 @@ Data and Research Design
 	The dependent variable is a binary indicator of repression. The dataset specifies three types of repression: intangible, tangible, and violent. The dependent variables is coded zero if no repression occurs, and one if the corresponding type of repression occurs. I choose to binarize the data because I only really am concerned with whether or not repression occurs, not how bad the repression was.  
 	The primary independent variables are the memory of each type of dissent. These variables are continuous. Symbolic “small-gauge” dissent is made up of four variables: whether the event was symbolic, whether the event had more than ten initiators, the length of the event, and whether violence is advocated . Mass dissent is a function of: the number participating, whether a weapon was used, or injury was caused, and whether violence was advocated. Political violence is a function of: whether the attack was targeted at a person, an ordinal weapons grade scale, and a count of those killed and injured. 
 	The memory variable was crafted using an exponential decay function. I use the seven year memory length suggested by Davenport (1996). The memory of dissent is equal to 
-dissent memory_mk=∑_(y=1)^7▒∑_(m=1)^12▒〖dissent_my^(〖(.9)〗^y ) 〗.
+	
+	
+dissent memory_mk.
+
+
+
 Where k is the temporal distance in terms of years and m is the temporal distance in terms of months. For example, for the country-month observation of January 2000, k=1 is the year of December 1999 to December 1998, and each month in this year is m ϵ 1:12.  Intuitively, this function sums the values for all months in a year. Then, that sum is exponentiated to the  .9 to the y. For one year in the past y is equal to one, and so on. Using January 2000 as an example still, the summed dissent of a year seven years ago was taken to the power of 〖.9〗^7=0.48. Assume the political violence has a value of 200 for this month, its contribution to memory seven years later is 〖200〗^(〖.9〗^7 )=12.61. This function downwardly weights the events of the past, as they become less recent up to seven years, at which point they are dropped from memory. 
 	Relevant controls include: logged GDP per capita in constant 2011 US Dollars (The Next Generation of the Penn World Table 2013), total population, urban population(Coppedge et al. 2011) , and whether or not the state was currently experiencing a war according to the Correlates of War dataset(Sarkees, Sarkees, and Wayman 2010).  Economic development has been hypothesized to decrease the likelihood of repression (Henderson 1991). States in wars have been shown to repress more often as a way to secure the domestic front (Young 2013). 
 	Because my dependent variable is binary, I will use logistic regression to test my hypotheses. The unit of analysis is country-month, but some variables vary at the country-year unit of analysis. To deal with this multilevel structure of the data I use random effects models using the year as the random intercept variable. This corrects standard errors that would have been misspecified using standard logistic regression and allows confident hypothesis testing. To account for time I implement Carter and Signorino’s (2010) advice and use a time polynomial.  
@@ -330,7 +467,7 @@ Results and Discussion
 	These results seem to suggest that democracies willingly repress when circumstances legitimate it, and that they repress when they think nobody is watching. Political violence legitimates the use of repressive policies, so democratic leaders face no cost for enacting these policies. Mass protests pose little threat to public security, but great threat leadership survival. Mass protests are also generally more organized and state response to such events are much more visible than symbolic dissent because of the organized nature of the dissent. In other words, if the state enacts repressive policies to fight symbolic dissent then they can get away with it unnoticed if they use intangible repression. Few would notice, and therefore few would care. However, it makes little sense that democracies would use more severe repressive policies than intangible repression as a response to symbolic dissent. 
 Conclusion
 	I argue that democratic leaders use repression as a policy tool with the threat level of the state legitimizes the use of repressive policies. I use the SPEED dataset to break apart repression into three categories: intangible, tangible, and violent. I also break apart dissent into three categories: symbolic, mass, and violent. I provide a more nuanced look at the dissent-repression nexus not only by looking at a disaggregated form of repression and dissent, but also looking at exclusively democracies and looking at the memory of dissent as opposed to exclusively contemporaneous dissent. 
-	I find that democracies respond with all types of repression as a response to symbolic dissent and political violence, and do not respond to mass dissent with repression. I think this finding is explained by looking at the visibility of state actions. Mass dissent is a very visible event, especially when it is persistent and large-scale. Therefore, repressing it is very visible to the public and poses high costs in terms of democratic legitimacy for infringing upon rights of expression promised by democratic states. Symbolic dissent, however, is possible to repress with relatively few people noticing via intangible repression. I leave it up to future avenues of work to understand why symbolic dissent begets tangible and violent repression. I also find that democracies response to political violence with all types of repression as it grows in memory. This is because it poses the greatest threat to security of the state and legitimizes the use of repression.  
+	I find that democracies respond with all types of repression as a response to symbolic dissent and political violence, and do not respond to mass dissent with repression. I think this finding is explained by looking at the visibility of state actions. Mass dissent is a very visible event, especially when it is persistent and large-scale. Therefore, repressing it is very visible to the public and poses high costs in terms of democratic legitimacy for infringing upon rights of expression promised by democratic states. Symbolic dissent, however, is possible to repress with relatively few people noticing via intangible repression. I leave it up to future avenues of work to understand why symbolic dissent begets tangible and violent repression. I also find that democracies response to political violence with all types of repression as it grows in memory. This is because it poses the greatest threat to security of the state and legitimizes the use of repression. 
 Appendix
 Table A1: Dissent Memory and Intangible Repression
 	M1	M2	M3	M4
@@ -397,7 +534,7 @@ Standard errors in parentheses
 * p < .05
 
 
- 
+
 Table A3: Dissent Memory and Violent Repression
 	M9	M10	M11	M12
 	Violent Repression
@@ -429,7 +566,7 @@ Observations	27672	27672	27672	27672
 Standard errors in parentheses
 * p < .05
 
- 
+
 References
 Baker, Peter. 2015. “In Debate Over Patriot Act, Lawmakers Weigh Risks vs. Liberty.” The New York Times. https://www.nytimes.com/2015/06/02/us/politics/in-debate-over-patriot-act-lawmakers-weigh-risks-vs-liberty.html (April 8, 2018).
 Bloch-Elkon, Yaeli. 2011. “The Polls—Trends: Public Perceptions and the Threat of International Terrorism after 9/11.” Public Opinion Quarterly 75(2): 366–92.
