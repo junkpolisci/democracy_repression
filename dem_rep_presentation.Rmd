@@ -1,7 +1,7 @@
 ---
 title: "Democratic Repression: Responding in Kind? "
 author: "Christopher Junk"
-date: "March 10, 2019"
+date: "March 30, 2019" 
 output: beamer_presentation
 ---
 
@@ -12,7 +12,7 @@ library(lme4)
 library(dotwhisker)
 ```
 
-```{r, eval=T}
+```{r, eval=F, cache=TRUE , message=FALSE}
 analysis <- read.csv("dem_rep_fulldata.csv") %>% 
             filter(lexical == 6) %>% 
             select(cowcode, 
@@ -240,7 +240,9 @@ violent_repression <- vio_rep %>% relabel_predictors(c(ln_polex_mem = "Political
                                       ) +
                    ggtitle("Violent Repression") +
                    theme(plot.title = element_text(hjust = 0.5))
+
 ```
+
 # Relevant Repression Findings
 * There is a dynamic relationship between dissent and repression (Lichbach 1987, Moore 1998)  
 
@@ -300,17 +302,17 @@ $$\sum_{y=1}^{7}\sum_{m=1}^{12} dissent_{ym}^{.9^y}$$
     + Logged GDP PC  
 
 # Intangible Repression 
-```{r}
+```{r, cache=T, eval=F, include = F}
 intangible_repression
 ```
 
 # Tangible Repression
-```{r}
+```{r, cache=TRUE, eval=F, include = F}
 tangible_repression
 ```
 
 # Violent Repression
-```{r}
+```{r, cache=TRUE, eval=F, include = F}
 violent_repression
 ```
 
