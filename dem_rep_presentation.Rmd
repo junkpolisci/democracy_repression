@@ -339,16 +339,18 @@ violent_repression
 
 ## Conclusions  
 
-__Intangible Repression__
+_Intangible Repression_
 
   * Symbolic dissent increases likelihood  
   
   * Political Violence decreases likelihood 
 
-__Tangible Repression__  
+_Tangible Repression_  
   
   * Symbolic dissent and political violence increase likelihood  
   
-__Violent Repression__  
+_Violent Repression_  
 
   * All forms of dissent decrease likelihood
+  
+__Democracies tend to avoid violent repression as a response to dissent, and prefer to avoid scrutiny by 'covertly' repressing.__

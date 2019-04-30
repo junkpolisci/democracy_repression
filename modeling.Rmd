@@ -1,0 +1,236 @@
+---
+title: "Modeling"
+author: "Christopher Junk"
+date: "April 30, 2019"
+output: html_document
+---
+```{r, eval=T}
+analysis <- read.csv("dem_rep_fulldata.csv") %>% 
+            filter(lexical == 6) %>% 
+            select(cowcode, 
+                   year_month, 
+                   intrastate, 
+                   year, 
+                   ln_gdp_pc,
+                   lexical,
+                   tot_pop,
+                   urban_pop,
+                   infant_mortality,
+                   life_expect,
+                   pol_ex_mem,
+                   mass_express_mem,
+                   pol_viol_mem, 
+                   int_rep, 
+                   tan_rep, 
+                   vio_rep, 
+                   t, 
+                   t2, 
+                   t3) %>% 
+             mutate(ln_polex_mem = log10(pol_ex_mem + 1), 
+                    ln_massex_mem = log10(mass_express_mem + 1), 
+                    ln_polvio_mem = log10(pol_viol_mem + 1), 
+                    totpop10k = tot_pop/10000, 
+                    urbanpop10k = urban_pop/10000,
+                    lnt = log10(t),
+                    lnt2 = log10(t2),
+                    lnt3 = log10(t3)) 
+
+tictoc::tic()
+int_polex <- glmer(int_rep ~ 
+                     ln_polex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+int_massex <- glmer(int_rep ~ 
+                     ln_massex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+int_polviol <- glmer(int_rep ~ 
+                     ln_polvio_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+tan_polex <- glmer(tan_rep ~ 
+                     ln_polex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+tan_massex <- glmer(tan_rep ~ 
+                     ln_massex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+tan_polviol <- glmer(tan_rep ~ 
+                     ln_polvio_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+vio_polex <- glmer(vio_rep ~ 
+                     ln_polex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+vio_massex <- glmer(vio_rep ~ 
+                     ln_massex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+vio_polviol <- glmer(vio_rep ~ 
+                     ln_polvio_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+beepr::beep(8)
+tictoc::toc()
+
+analysis <- analysis %>% 
+            mutate(complete = ifelse(!is.na(ln_polvio_mem &
+                                            ln_polex_mem &
+                                            ln_massex_mem &
+                                            int_rep &
+                                            tan_rep &
+                                            vio_rep &
+                                            intrastate & 
+                                            ln_gdp_pc &
+                                            totpop10k & 
+                                            urbanpop10k & 
+                                            lnt &
+                                            lnt2 & 
+                                            lnt3),
+                                     1, 
+                                     0), 
+                   date = ifelse(complete == 1, 
+                                 year_month, 
+                                 0))
+
+
+
+int_rep <- dwplot(c(int_polex, 
+                     int_massex, 
+                     int_polviol 
+                     ),
+                  vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) 
+
+intangible_repression <- int_rep %>% relabel_predictors(c(ln_polex_mem = "Political Expression",
+                                       ln_massex_mem = "Mass Expression",
+                                       ln_polvio_mem = "Political Violence", 
+                                       intrastate = "Civil War", 
+                                       ln_gdp_pc = "Logged GDP Per Capita",
+                                       totpop10k = "Total Population / 10k",
+                                       urbanpop10k = "Urban Population / 10k",
+                                       lnt = "T",
+                                       "sd_(Intercept).cowcode" = "SD of Intercept")
+                                      ) +
+                   ggtitle("Intangible Repression") +
+                   theme(plot.title = element_text(hjust = 0.5))
+
+tan_rep <- dwplot(c(tan_polex, 
+                     tan_massex, 
+                     tan_polviol),
+                   vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2))
+
+tangible_repression <- tan_rep %>% relabel_predictors(c(ln_polex_mem = "Political Expression",
+                                       ln_massex_mem = "Mass Expression",
+                                       ln_polvio_mem = "Political Violence", 
+                                       intrastate = "Civil War", 
+                                       ln_gdp_pc = "Logged GDP Per Capita",
+                                       totpop10k = "Total Population / 10k",
+                                       urbanpop10k = "Urban Population / 10k",
+                                       lnt = "T",
+                                       "sd_(Intercept).cowcode" = "SD of Intercept")
+                                      ) +
+                   ggtitle("Tangible Repression") +
+                   theme(plot.title = element_text(hjust = 0.5))
+
+vio_rep <- dwplot(c(vio_polex,
+                     vio_massex,
+                     vio_polviol),
+                   vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2))
+
+violent_repression <- vio_rep %>% relabel_predictors(c(ln_polex_mem = "Political Expression",
+                                       ln_massex_mem = "Mass Expression",
+                                       ln_polvio_mem = "Political Violence", 
+                                       intrastate = "Civil War", 
+                                       ln_gdp_pc = "Logged GDP Per Capita",
+                                       totpop10k = "Total Population / 10k",
+                                       urbanpop10k = "Urban Population / 10k",
+                                       lnt = "T",
+                                       "sd_(Intercept).cowcode" = "SD of Intercept")
+                                      ) +
+                   ggtitle("Violent Repression") +
+                   theme(plot.title = element_text(hjust = 0.5))
+
+```
