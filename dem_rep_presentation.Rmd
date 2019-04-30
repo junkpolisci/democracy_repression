@@ -2,7 +2,7 @@
 title: "Democratic Repression: Responding in Kind? "
 author: "Christopher Junk"
 date: "March 30, 2019" 
-output: beamer_presentation
+output: ioslides_presentation
 ---
 
 ```{r setup, include=FALSE}
@@ -12,7 +12,7 @@ library(lme4)
 library(dotwhisker)
 ```
 
-```{r, eval=F, cache=TRUE , message=FALSE}
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 analysis <- read.csv("dem_rep_fulldata.csv") %>% 
             filter(lexical == 6) %>% 
             select(cowcode, 
@@ -42,8 +42,9 @@ analysis <- read.csv("dem_rep_fulldata.csv") %>%
                     lnt = log10(t),
                     lnt2 = log10(t2),
                     lnt3 = log10(t3)) 
+```
 
-tictoc::tic()
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 int_polex <- glmer(int_rep ~ 
                      ln_polex_mem + 
                      intrastate + 
@@ -56,6 +57,9 @@ int_polex <- glmer(int_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
+
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 
 int_massex <- glmer(int_rep ~ 
                      ln_massex_mem + 
@@ -69,7 +73,9 @@ int_massex <- glmer(int_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
 
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 int_polviol <- glmer(int_rep ~ 
                      ln_polvio_mem + 
                      intrastate + 
@@ -82,7 +88,9 @@ int_polviol <- glmer(int_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
 
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 tan_polex <- glmer(tan_rep ~ 
                      ln_polex_mem + 
                      intrastate + 
@@ -95,7 +103,9 @@ tan_polex <- glmer(tan_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
 
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 tan_massex <- glmer(tan_rep ~ 
                      ln_massex_mem + 
                      intrastate + 
@@ -108,7 +118,9 @@ tan_massex <- glmer(tan_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
 
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 tan_polviol <- glmer(tan_rep ~ 
                      ln_polvio_mem + 
                      intrastate + 
@@ -121,7 +133,9 @@ tan_polviol <- glmer(tan_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
 
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 vio_polex <- glmer(vio_rep ~ 
                      ln_polex_mem + 
                      intrastate + 
@@ -134,7 +148,9 @@ vio_polex <- glmer(vio_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
+```
 
+```{r, eval=T, cache=TRUE , message=FALSE, include=F}
 vio_massex <- glmer(vio_rep ~ 
                      ln_massex_mem + 
                      intrastate + 
@@ -160,9 +176,6 @@ vio_polviol <- glmer(vio_rep ~
                      (1 | cowcode), 
                    family = binomial,
                    data = analysis )
-
-beepr::beep(8)
-tictoc::toc()
 
 analysis <- analysis %>% 
             mutate(complete = ifelse(!is.na(ln_polvio_mem &
@@ -243,7 +256,8 @@ violent_repression <- vio_rep %>% relabel_predictors(c(ln_polex_mem = "Political
 
 ```
 
-# Relevant Repression Findings
+## Relevant Repression Findings  
+
 * There is a dynamic relationship between dissent and repression (Lichbach 1987, Moore 1998)  
 
 * The level of threat a state experiences has a more robust association with repression than democratic-ness (Regan and Henderson 2002)  
@@ -252,7 +266,8 @@ violent_repression <- vio_rep %>% relabel_predictors(c(ln_polex_mem = "Political
 
 * In general, the “more murder in the middle” hypothesis seems to hold true here (Davenport 2007)  
 
-# Theoretical Expectations
+## Theoretical Expectations  
+
 Assume:  
 
 * Leaders are selfish and seek relection 
@@ -269,7 +284,8 @@ Repressive policies are legitimated when the threat to security is sufficiently 
 
 * Repression for the sake of security provision cannot be incongruent with dissent  
 
-# Type of Repression
+## Type of Repression  
+
 __Intangible Repression__  
 Violating political/civil rights; suspending government services  
 
@@ -279,14 +295,16 @@ Mobilizing coercive forces, disbanding crowds, harassment, threats, arrests, sus
 __Violent Repression__  
 State attacks property/humans with force; including police/military forces  
 
-# Expectations
+## Expectations  
+
   1.  Symbolic dissent memory is not associated with repression.  
   1.  As mass expression memory increases, tangible and intangible repression becomes more likely.  
   1.  As political violence memory increases, all repression becomes more likely (intangible, tangible, violent).  
   
 $$\sum_{y=1}^{7}\sum_{m=1}^{12} dissent_{ym}^{.9^y}$$
   
-# Analysis 
+## Analysis   
+
 * Random Effects Logit  
     + April 1946 - Dec 2012  
     + 85 countries  
@@ -301,19 +319,36 @@ $$\sum_{y=1}^{7}\sum_{m=1}^{12} dissent_{ym}^{.9^y}$$
     + Population (total and urban)  
     + Logged GDP PC  
 
-# Intangible Repression 
-```{r, cache=T, eval=F, include = F}
-intangible_repression
+## Intangible Repression  
+
+```{r, cache=T, eval=T, include = T}
+plot(intangible_repression)
 ```
 
-# Tangible Repression
-```{r, cache=TRUE, eval=F, include = F}
+## Tangible Repression  
+
+```{r, cache=TRUE, eval=T, include = T}
 tangible_repression
 ```
 
-# Violent Repression
-```{r, cache=TRUE, eval=F, include = F}
+## Violent Repression  
+
+```{r, cache=TRUE, eval=T, include = T}
 violent_repression
 ```
 
+## Conclusions  
 
+__Intangible Repression__
+
+  * Symbolic dissent increases likelihood  
+  
+  * Political Violence decreases likelihood 
+
+__Tangible Repression__  
+  
+  * Symbolic dissent and political violence increase likelihood  
+  
+__Violent Repression__  
+
+  * All forms of dissent decrease likelihood
