@@ -273,7 +273,7 @@ intrastate_expand$year_month <- zoo::as.yearmon(intrastate_expand$year_month)
 intrastate_expand <- intrastate_expand %>% 
                      select(id, mdate1, mdate2, year_month, start_ym1, end_ym1, start_ym2, end_ym2, cowcode, intrastate)
                      
-analysis <- left_join(system_month, intrastate_expand) %>%
+analysis_prep <- left_join(system_month, intrastate_expand) %>%
             select(cowcode, cowname, intrastate, year_month) %>% 
             mutate(intrastate = (ifelse(!is.na(intrastate), intrastate, 0)))
 ```
@@ -396,7 +396,7 @@ interstate_final <- interstate_expand %>%
                     filter(your_month >= "Jan 1944") %>% 
                     select(cowcode, year_month, interstate)
 
-analysis <- left_join(analysis, interstate_final) %>% 
+analysis_prep <- left_join(analysis_prep, interstate_final) %>% 
             mutate(interstate = ifelse(!is.na(interstate),
                                        interstate,
                                        0),
@@ -404,6 +404,7 @@ analysis <- left_join(analysis, interstate_final) %>%
                                 1,
                                 0)
                    )
+
 ```
 
 ```{r v-dem_controls, include=FALSE}
@@ -420,9 +421,368 @@ vdem_controls <- vdem %>%
                infant_mortality = e_peinfmor,
                life_expect = e_pelifeex)
 
-analysis$year <- as.numeric(format(analysis$year_month, "%Y"))
+analysis_prep$year <- as.numeric(format(analysis_prep$year_month, "%Y"))
 
-analysis <- left_join(analysis, vdem_controls)
+analysis_prep <- left_join(analysis_prep, vdem_controls)
+analysis_prep <- left_join(analysis_prep, speed_country_month)
+```
+
+```{r analysis}
+analysis <- analysis_prep %>% 
+            group_by(cowcode) %>% 
+            filter(year_month >= "Jan 1946", 
+                year_month <= "Dec 2006") %>% 
+            mutate(complete = ifelse(!is.na(year_month &
+                                            cowcode &
+                                            ln_gdp_pc &
+                                            lexical &
+                                            tot_pop &
+                                            urban_pop &
+                                            infant_mortality &
+                                            life_expect),
+                                     1,
+                                     0),
+                   t = seq_along(cowcode), 
+                   t2 = t^2,
+                   t3 = t^3,
+                   pol_ex = ifelse(is.na(mean_pol_express),
+                                   0, 
+                                   mean_pol_express),
+                   mass_express = ifelse(is.na(mean_mass_express), 
+                                          0, 
+                                          mean_mass_express), 
+                   pol_viol = ifelse(is.na(mean_pol_viol), 
+                                     0, 
+                                     mean_pol_viol), 
+                   int_rep = ifelse(is.na(mean_intang_rep),
+                                    0, 
+                                    1), 
+                   tan_rep = ifelse(is.na(mean_st_repress), 
+                                    0, 
+                                    1), 
+                   vio_rep = ifelse(is.na(mean_stat_viol), 
+                                    0, 
+                                    1)) %>% 
+             ungroup() %>% 
+             select(cowcode, 
+                    t, 
+                    year_month,
+                    everything())
+
+lags <- analysis %>% 
+        group_by(cowcode) %>% 
+        arrange(cowcode, year_month) %>% 
+        mutate(pol_ex_y1_1 = lag(pol_ex, 1), 
+              pol_ex_y1_2 = lag(pol_ex, 2), 
+              pol_ex_y1_3 = lag(pol_ex, 3), 
+              pol_ex_y1_4 = lag(pol_ex, 4), 
+              pol_ex_y1_5 = lag(pol_ex, 5), 
+              pol_ex_y1_6 = lag(pol_ex, 6), 
+              pol_ex_y1_7 = lag(pol_ex, 7), 
+              pol_ex_y1_8 = lag(pol_ex, 8), 
+              pol_ex_y1_9 = lag(pol_ex, 9), 
+              pol_ex_y1_10 = lag(pol_ex, 10), 
+              pol_ex_y1_11 = lag(pol_ex, 11), 
+              pol_ex_y1_12 = lag(pol_ex, 12), 
+              pol_ex_y2_13 = lag(pol_ex, 13), 
+              pol_ex_y2_14 = lag(pol_ex, 14), 
+              pol_ex_y2_15 = lag(pol_ex, 15), 
+              pol_ex_y2_16 = lag(pol_ex, 16), 
+              pol_ex_y2_17 = lag(pol_ex, 17), 
+              pol_ex_y2_18 = lag(pol_ex, 18), 
+              pol_ex_y2_19 = lag(pol_ex, 19), 
+              pol_ex_y2_20 = lag(pol_ex, 20), 
+              pol_ex_y2_21 = lag(pol_ex, 21), 
+              pol_ex_y2_22 = lag(pol_ex, 22), 
+              pol_ex_y2_23 = lag(pol_ex, 23), 
+              pol_ex_y2_24 = lag(pol_ex, 24), 
+              pol_ex_y3_25 = lag(pol_ex, 25), 
+              pol_ex_y3_26 = lag(pol_ex, 26), 
+              pol_ex_y3_27 = lag(pol_ex, 27), 
+              pol_ex_y3_28 = lag(pol_ex, 28), 
+              pol_ex_y3_29 = lag(pol_ex, 29), 
+              pol_ex_y3_30 = lag(pol_ex, 30), 
+              pol_ex_y3_31 = lag(pol_ex, 31), 
+              pol_ex_y3_32 = lag(pol_ex, 32), 
+              pol_ex_y3_33 = lag(pol_ex, 33), 
+              pol_ex_y3_34 = lag(pol_ex, 34), 
+              pol_ex_y3_35 = lag(pol_ex, 35), 
+              pol_ex_y3_36 = lag(pol_ex, 36), 
+              pol_ex_y4_37 = lag(pol_ex, 37), 
+              pol_ex_y4_38 = lag(pol_ex, 38), 
+              pol_ex_y4_39 = lag(pol_ex, 39), 
+              pol_ex_y4_40 = lag(pol_ex, 40), 
+              pol_ex_y4_41 = lag(pol_ex, 41), 
+              pol_ex_y4_42 = lag(pol_ex, 42), 
+              pol_ex_y4_43 = lag(pol_ex, 43), 
+              pol_ex_y4_44 = lag(pol_ex, 44), 
+              pol_ex_y4_45 = lag(pol_ex, 45), 
+              pol_ex_y4_46 = lag(pol_ex, 46), 
+              pol_ex_y4_47 = lag(pol_ex, 47), 
+              pol_ex_y4_48 = lag(pol_ex, 48), 
+              pol_ex_y5_49 = lag(pol_ex, 49), 
+              pol_ex_y5_50 = lag(pol_ex, 50), 
+              pol_ex_y5_51 = lag(pol_ex, 51), 
+              pol_ex_y5_52 = lag(pol_ex, 52), 
+              pol_ex_y5_53 = lag(pol_ex, 53), 
+              pol_ex_y5_54 = lag(pol_ex, 54), 
+              pol_ex_y5_55 = lag(pol_ex, 55), 
+              pol_ex_y5_56 = lag(pol_ex, 56), 
+              pol_ex_y5_57 = lag(pol_ex, 57), 
+              pol_ex_y5_58 = lag(pol_ex, 58), 
+              pol_ex_y5_59 = lag(pol_ex, 59), 
+              pol_ex_y5_60 = lag(pol_ex, 60), 
+              pol_ex_y6_61 = lag(pol_ex, 61), 
+              pol_ex_y6_62 = lag(pol_ex, 62), 
+              pol_ex_y6_63 = lag(pol_ex, 63), 
+              pol_ex_y6_64 = lag(pol_ex, 64), 
+              pol_ex_y6_65 = lag(pol_ex, 65), 
+              pol_ex_y6_66 = lag(pol_ex, 66), 
+              pol_ex_y6_67 = lag(pol_ex, 67), 
+              pol_ex_y6_68 = lag(pol_ex, 68), 
+              pol_ex_y6_69 = lag(pol_ex, 69), 
+              pol_ex_y6_70 = lag(pol_ex, 70), 
+              pol_ex_y6_71 = lag(pol_ex, 71), 
+              pol_ex_y6_72 = lag(pol_ex, 72), 
+              pol_ex_y7_73 = lag(pol_ex, 73), 
+              pol_ex_y7_74 = lag(pol_ex, 74), 
+              pol_ex_y7_75 = lag(pol_ex, 75), 
+              pol_ex_y7_76 = lag(pol_ex, 76), 
+              pol_ex_y7_77 = lag(pol_ex, 77), 
+              pol_ex_y7_78 = lag(pol_ex, 78), 
+              pol_ex_y7_79 = lag(pol_ex, 79), 
+              pol_ex_y7_80 = lag(pol_ex, 80), 
+              pol_ex_y7_81 = lag(pol_ex, 81), 
+              pol_ex_y7_82 = lag(pol_ex, 82), 
+              pol_ex_y7_83 = lag(pol_ex, 83), 
+              pol_ex_y7_84 = lag(pol_ex, 84),
+              mass_express_y1_1 = lag(mass_express, 1), 
+              mass_express_y1_2 = lag(mass_express, 2), 
+              mass_express_y1_3 = lag(mass_express, 3), 
+              mass_express_y1_4 = lag(mass_express, 4), 
+              mass_express_y1_5 = lag(mass_express, 5), 
+              mass_express_y1_6 = lag(mass_express, 6), 
+              mass_express_y1_7 = lag(mass_express, 7), 
+              mass_express_y1_8 = lag(mass_express, 8), 
+              mass_express_y1_9 = lag(mass_express, 9), 
+              mass_express_y1_10 = lag(mass_express, 10), 
+              mass_express_y1_11 = lag(mass_express, 11), 
+              mass_express_y1_12 = lag(mass_express, 12), 
+              mass_express_y2_13 = lag(mass_express, 13), 
+              mass_express_y2_14 = lag(mass_express, 14), 
+              mass_express_y2_15 = lag(mass_express, 15), 
+              mass_express_y2_16 = lag(mass_express, 16), 
+              mass_express_y2_17 = lag(mass_express, 17), 
+              mass_express_y2_18 = lag(mass_express, 18), 
+              mass_express_y2_19 = lag(mass_express, 19), 
+              mass_express_y2_20 = lag(mass_express, 20), 
+              mass_express_y2_21 = lag(mass_express, 21), 
+              mass_express_y2_22 = lag(mass_express, 22), 
+              mass_express_y2_23 = lag(mass_express, 23), 
+              mass_express_y2_24 = lag(mass_express, 24), 
+              mass_express_y3_25 = lag(mass_express, 25), 
+              mass_express_y3_26 = lag(mass_express, 26), 
+              mass_express_y3_27 = lag(mass_express, 27), 
+              mass_express_y3_28 = lag(mass_express, 28), 
+              mass_express_y3_29 = lag(mass_express, 29), 
+              mass_express_y3_30 = lag(mass_express, 30), 
+              mass_express_y3_31 = lag(mass_express, 31), 
+              mass_express_y3_32 = lag(mass_express, 32), 
+              mass_express_y3_33 = lag(mass_express, 33), 
+              mass_express_y3_34 = lag(mass_express, 34), 
+              mass_express_y3_35 = lag(mass_express, 35), 
+              mass_express_y3_36 = lag(mass_express, 36), 
+              mass_express_y4_37 = lag(mass_express, 37), 
+              mass_express_y4_38 = lag(mass_express, 38), 
+              mass_express_y4_39 = lag(mass_express, 39), 
+              mass_express_y4_40 = lag(mass_express, 40), 
+              mass_express_y4_41 = lag(mass_express, 41), 
+              mass_express_y4_42 = lag(mass_express, 42), 
+              mass_express_y4_43 = lag(mass_express, 43), 
+              mass_express_y4_44 = lag(mass_express, 44), 
+              mass_express_y4_45 = lag(mass_express, 45), 
+              mass_express_y4_46 = lag(mass_express, 46), 
+              mass_express_y4_47 = lag(mass_express, 47), 
+              mass_express_y4_48 = lag(mass_express, 48), 
+              mass_express_y5_49 = lag(mass_express, 49), 
+              mass_express_y5_50 = lag(mass_express, 50), 
+              mass_express_y5_51 = lag(mass_express, 51), 
+              mass_express_y5_52 = lag(mass_express, 52), 
+              mass_express_y5_53 = lag(mass_express, 53), 
+              mass_express_y5_54 = lag(mass_express, 54), 
+              mass_express_y5_55 = lag(mass_express, 55), 
+              mass_express_y5_56 = lag(mass_express, 56), 
+              mass_express_y5_57 = lag(mass_express, 57), 
+              mass_express_y5_58 = lag(mass_express, 58), 
+              mass_express_y5_59 = lag(mass_express, 59), 
+              mass_express_y5_60 = lag(mass_express, 60), 
+              mass_express_y6_61 = lag(mass_express, 61), 
+              mass_express_y6_62 = lag(mass_express, 62), 
+              mass_express_y6_63 = lag(mass_express, 63), 
+              mass_express_y6_64 = lag(mass_express, 64), 
+              mass_express_y6_65 = lag(mass_express, 65), 
+              mass_express_y6_66 = lag(mass_express, 66), 
+              mass_express_y6_67 = lag(mass_express, 67), 
+              mass_express_y6_68 = lag(mass_express, 68), 
+              mass_express_y6_69 = lag(mass_express, 69), 
+              mass_express_y6_70 = lag(mass_express, 70), 
+              mass_express_y6_71 = lag(mass_express, 71), 
+              mass_express_y6_72 = lag(mass_express, 72), 
+              mass_express_y7_73 = lag(mass_express, 73), 
+              mass_express_y7_74 = lag(mass_express, 74), 
+              mass_express_y7_75 = lag(mass_express, 75), 
+              mass_express_y7_76 = lag(mass_express, 76), 
+              mass_express_y7_77 = lag(mass_express, 77), 
+              mass_express_y7_78 = lag(mass_express, 78), 
+              mass_express_y7_79 = lag(mass_express, 79), 
+              mass_express_y7_80 = lag(mass_express, 80), 
+              mass_express_y7_81 = lag(mass_express, 81), 
+              mass_express_y7_82 = lag(mass_express, 82), 
+              mass_express_y7_83 = lag(mass_express, 83), 
+              mass_express_y7_84 = lag(mass_express, 84),
+              pol_viol_y1_1 = lag(pol_viol, 1), 
+              pol_viol_y1_2 = lag(pol_viol, 2), 
+              pol_viol_y1_3 = lag(pol_viol, 3), 
+              pol_viol_y1_4 = lag(pol_viol, 4), 
+              pol_viol_y1_5 = lag(pol_viol, 5), 
+              pol_viol_y1_6 = lag(pol_viol, 6), 
+              pol_viol_y1_7 = lag(pol_viol, 7), 
+              pol_viol_y1_8 = lag(pol_viol, 8), 
+              pol_viol_y1_9 = lag(pol_viol, 9), 
+              pol_viol_y1_10 = lag(pol_viol, 10), 
+              pol_viol_y1_11 = lag(pol_viol, 11), 
+              pol_viol_y1_12 = lag(pol_viol, 12), 
+              pol_viol_y2_13 = lag(pol_viol, 13), 
+              pol_viol_y2_14 = lag(pol_viol, 14), 
+              pol_viol_y2_15 = lag(pol_viol, 15), 
+              pol_viol_y2_16 = lag(pol_viol, 16), 
+              pol_viol_y2_17 = lag(pol_viol, 17), 
+              pol_viol_y2_18 = lag(pol_viol, 18), 
+              pol_viol_y2_19 = lag(pol_viol, 19), 
+              pol_viol_y2_20 = lag(pol_viol, 20), 
+              pol_viol_y2_21 = lag(pol_viol, 21), 
+              pol_viol_y2_22 = lag(pol_viol, 22), 
+              pol_viol_y2_23 = lag(pol_viol, 23), 
+              pol_viol_y2_24 = lag(pol_viol, 24), 
+              pol_viol_y3_25 = lag(pol_viol, 25), 
+              pol_viol_y3_26 = lag(pol_viol, 26), 
+              pol_viol_y3_27 = lag(pol_viol, 27), 
+              pol_viol_y3_28 = lag(pol_viol, 28), 
+              pol_viol_y3_29 = lag(pol_viol, 29), 
+              pol_viol_y3_30 = lag(pol_viol, 30), 
+              pol_viol_y3_31 = lag(pol_viol, 31), 
+              pol_viol_y3_32 = lag(pol_viol, 32), 
+              pol_viol_y3_33 = lag(pol_viol, 33), 
+              pol_viol_y3_34 = lag(pol_viol, 34), 
+              pol_viol_y3_35 = lag(pol_viol, 35), 
+              pol_viol_y3_36 = lag(pol_viol, 36), 
+              pol_viol_y4_37 = lag(pol_viol, 37), 
+              pol_viol_y4_38 = lag(pol_viol, 38), 
+              pol_viol_y4_39 = lag(pol_viol, 39), 
+              pol_viol_y4_40 = lag(pol_viol, 40), 
+              pol_viol_y4_41 = lag(pol_viol, 41), 
+              pol_viol_y4_42 = lag(pol_viol, 42), 
+              pol_viol_y4_43 = lag(pol_viol, 43), 
+              pol_viol_y4_44 = lag(pol_viol, 44), 
+              pol_viol_y4_45 = lag(pol_viol, 45), 
+              pol_viol_y4_46 = lag(pol_viol, 46), 
+              pol_viol_y4_47 = lag(pol_viol, 47), 
+              pol_viol_y4_48 = lag(pol_viol, 48), 
+              pol_viol_y5_49 = lag(pol_viol, 49), 
+              pol_viol_y5_50 = lag(pol_viol, 50), 
+              pol_viol_y5_51 = lag(pol_viol, 51), 
+              pol_viol_y5_52 = lag(pol_viol, 52), 
+              pol_viol_y5_53 = lag(pol_viol, 53), 
+              pol_viol_y5_54 = lag(pol_viol, 54), 
+              pol_viol_y5_55 = lag(pol_viol, 55), 
+              pol_viol_y5_56 = lag(pol_viol, 56), 
+              pol_viol_y5_57 = lag(pol_viol, 57), 
+              pol_viol_y5_58 = lag(pol_viol, 58), 
+              pol_viol_y5_59 = lag(pol_viol, 59), 
+              pol_viol_y5_60 = lag(pol_viol, 60), 
+              pol_viol_y6_61 = lag(pol_viol, 61), 
+              pol_viol_y6_62 = lag(pol_viol, 62), 
+              pol_viol_y6_63 = lag(pol_viol, 63), 
+              pol_viol_y6_64 = lag(pol_viol, 64), 
+              pol_viol_y6_65 = lag(pol_viol, 65), 
+              pol_viol_y6_66 = lag(pol_viol, 66), 
+              pol_viol_y6_67 = lag(pol_viol, 67), 
+              pol_viol_y6_68 = lag(pol_viol, 68), 
+              pol_viol_y6_69 = lag(pol_viol, 69), 
+              pol_viol_y6_70 = lag(pol_viol, 70), 
+              pol_viol_y6_71 = lag(pol_viol, 71), 
+              pol_viol_y6_72 = lag(pol_viol, 72), 
+              pol_viol_y7_73 = lag(pol_viol, 73), 
+              pol_viol_y7_74 = lag(pol_viol, 74), 
+              pol_viol_y7_75 = lag(pol_viol, 75), 
+              pol_viol_y7_76 = lag(pol_viol, 76), 
+              pol_viol_y7_77 = lag(pol_viol, 77), 
+              pol_viol_y7_78 = lag(pol_viol, 78), 
+              pol_viol_y7_79 = lag(pol_viol, 79), 
+              pol_viol_y7_80 = lag(pol_viol, 80), 
+              pol_viol_y7_81 = lag(pol_viol, 81), 
+              pol_viol_y7_82 = lag(pol_viol, 82), 
+              pol_viol_y7_83 = lag(pol_viol, 83), 
+              pol_viol_y7_84 = lag(pol_viol, 84)
+)
+
+lags_years <- lags %>% 
+              mutate(pol_viol_y1 = pol_viol_y1_1 + pol_viol_y1_2 + pol_viol_y1_3 + pol_viol_y1_4 + pol_viol_y1_5 + pol_viol_y1_6 + pol_viol_y1_7 + pol_viol_y1_8 + pol_viol_y1_9 + pol_viol_y1_10 + pol_viol_y1_11 + pol_viol_y1_12,
+                     
+                     pol_viol_y2 = pol_viol_y2_13 + pol_viol_y2_14 + pol_viol_y2_15 + pol_viol_y2_16 + pol_viol_y2_17 + pol_viol_y2_18 + pol_viol_y2_19 + pol_viol_y2_20 + pol_viol_y2_21 + pol_viol_y2_22 + pol_viol_y2_23 + pol_viol_y2_24,
+                     
+                     pol_viol_y3 = pol_viol_y3_25 + pol_viol_y3_26 + pol_viol_y3_27 + pol_viol_y3_28 + pol_viol_y3_29 + pol_viol_y3_30 + pol_viol_y3_31 + pol_viol_y3_32 + pol_viol_y3_33 + pol_viol_y3_34 + pol_viol_y3_35 + pol_viol_y3_36,
+                     
+                     pol_viol_y4 = pol_viol_y4_37 + pol_viol_y4_38 + pol_viol_y4_39 + pol_viol_y4_40 + pol_viol_y4_41 + pol_viol_y4_42 + pol_viol_y4_43 + pol_viol_y4_44 + pol_viol_y4_45 + pol_viol_y4_46 + pol_viol_y4_47 + pol_viol_y4_48,
+                     
+                     pol_viol_y5 = pol_viol_y5_49 + pol_viol_y5_50 + pol_viol_y5_51 + pol_viol_y5_52 + pol_viol_y5_53 + pol_viol_y5_54 + pol_viol_y5_55 + pol_viol_y5_56 + pol_viol_y5_57 + pol_viol_y5_58 + pol_viol_y5_59 + pol_viol_y5_60,
+                     
+                     pol_viol_y6 = pol_viol_y6_61 + pol_viol_y6_62 + pol_viol_y6_63 + pol_viol_y6_64 + pol_viol_y6_65 + pol_viol_y6_66 + pol_viol_y6_67 + pol_viol_y6_68 + pol_viol_y6_69 + pol_viol_y6_70 + pol_viol_y6_71 + pol_viol_y6_72,
+                     
+                     pol_viol_y7 = pol_viol_y7_73 + pol_viol_y7_74 + pol_viol_y7_75 + pol_viol_y7_76 + pol_viol_y7_77 + pol_viol_y7_78 + pol_viol_y7_79 + pol_viol_y7_80 + pol_viol_y7_81 + pol_viol_y7_82 + pol_viol_y7_83 + pol_viol_y7_84,
+                     
+                     mass_express_y1 = mass_express_y1_1 + mass_express_y1_2 + mass_express_y1_3 + mass_express_y1_4 + mass_express_y1_5 + mass_express_y1_6 + mass_express_y1_7 + mass_express_y1_8 + mass_express_y1_9 + mass_express_y1_10 + mass_express_y1_11 + mass_express_y1_12,
+                     
+                    mass_express_y2 = mass_express_y2_13 + mass_express_y2_14 + mass_express_y2_15 + mass_express_y2_16 + mass_express_y2_17 + mass_express_y2_18 + mass_express_y2_19 + mass_express_y2_20 + mass_express_y2_21 + mass_express_y2_22 + mass_express_y2_23 + mass_express_y2_24,
+                    
+                    mass_express_y3 = mass_express_y3_25 + mass_express_y3_26 + mass_express_y3_27 + mass_express_y3_28 + mass_express_y3_29 + mass_express_y3_30 + mass_express_y3_31 + mass_express_y3_32 + mass_express_y3_33 + mass_express_y3_34 + mass_express_y3_35 + mass_express_y3_36,
+                    
+                    mass_express_y4 = mass_express_y4_37 + mass_express_y4_38 + mass_express_y4_39 + mass_express_y4_40 + mass_express_y4_41 + mass_express_y4_42 + mass_express_y4_43 + mass_express_y4_44 + mass_express_y4_45 + mass_express_y4_46 + mass_express_y4_47 + mass_express_y4_48,
+                    
+                    mass_express_y5 = mass_express_y5_49 + mass_express_y5_50 + mass_express_y5_51 + mass_express_y5_52 + mass_express_y5_53 + mass_express_y5_54 + mass_express_y5_55 + mass_express_y5_56 + mass_express_y5_57 + mass_express_y5_58 + mass_express_y5_59 + mass_express_y5_60,
+                    
+                    mass_express_y6 = mass_express_y6_61 + mass_express_y6_62 + mass_express_y6_63 + mass_express_y6_64 + mass_express_y6_65 + mass_express_y6_66 + mass_express_y6_67 + mass_express_y6_68 + mass_express_y6_69 + mass_express_y6_70 + mass_express_y6_71 + mass_express_y6_72,
+                    
+                    mass_express_y7 = mass_express_y7_73 + mass_express_y7_74 + mass_express_y7_75 + mass_express_y7_76 + mass_express_y7_77 + mass_express_y7_78 + mass_express_y7_79 + mass_express_y7_80 + mass_express_y7_81 + mass_express_y7_82 + mass_express_y7_83 + mass_express_y7_84,
+
+                    pol_ex_y1 = pol_ex_y1_1 + pol_ex_y1_2 + pol_ex_y1_3 + pol_ex_y1_4 + pol_ex_y1_5 + pol_ex_y1_6 + pol_ex_y1_7 + pol_ex_y1_8 + pol_ex_y1_9 + pol_ex_y1_10 + pol_ex_y1_11 + pol_ex_y1_12,
+                     
+                    pol_ex_y2 = pol_ex_y2_13 + pol_ex_y2_14 + pol_ex_y2_15 + pol_ex_y2_16 + pol_ex_y2_17 + pol_ex_y2_18 + pol_ex_y2_19 + pol_ex_y2_20 + pol_ex_y2_21 + pol_ex_y2_22 + pol_ex_y2_23 + pol_ex_y2_24,
+                    
+                    pol_ex_y3 = pol_ex_y3_25 + pol_ex_y3_26 + pol_ex_y3_27 + pol_ex_y3_28 + pol_ex_y3_29 + pol_ex_y3_30 + pol_ex_y3_31 + pol_ex_y3_32 + pol_ex_y3_33 + pol_ex_y3_34 + pol_ex_y3_35 + pol_ex_y3_36,
+                    
+                    pol_ex_y4 = pol_ex_y4_37 + pol_ex_y4_38 + pol_ex_y4_39 + pol_ex_y4_40 + pol_ex_y4_41 + pol_ex_y4_42 + pol_ex_y4_43 + pol_ex_y4_44 + pol_ex_y4_45 + pol_ex_y4_46 + pol_ex_y4_47 + pol_ex_y4_48,
+                    
+                    pol_ex_y5 = pol_ex_y5_49 + pol_ex_y5_50 + pol_ex_y5_51 + pol_ex_y5_52 + pol_ex_y5_53 + pol_ex_y5_54 + pol_ex_y5_55 + pol_ex_y5_56 + pol_ex_y5_57 + pol_ex_y5_58 + pol_ex_y5_59 + pol_ex_y5_60,
+                    
+                    pol_ex_y6 = pol_ex_y6_61 + pol_ex_y6_62 + pol_ex_y6_63 + pol_ex_y6_64 + pol_ex_y6_65 + pol_ex_y6_66 + pol_ex_y6_67 + pol_ex_y6_68 + pol_ex_y6_69 + pol_ex_y6_70 + pol_ex_y6_71 + pol_ex_y6_72,
+                    
+                    pol_ex_y7 = pol_ex_y7_73 + pol_ex_y7_74 + pol_ex_y7_75 + pol_ex_y7_76 + pol_ex_y7_77 + pol_ex_y7_78 + pol_ex_y7_79 + pol_ex_y7_80 + pol_ex_y7_81 + pol_ex_y7_82 + pol_ex_y7_83 + pol_ex_y7_84
+)
+
+lags_decay <- lags_years %>% 
+              mutate(pol_ex_mem = pol_ex_y1^(.9^1) + pol_ex_y2^(.9^2) + pol_ex_y3^(.9^3) + pol_ex_y4^(.9^4) + pol_ex_y5^(.9^5) + pol_ex_y6^(.9^6) + pol_ex_y7^(.9^7),
+                     mass_express_mem = mass_express_y1^(.9^1) + mass_express_y2^(.9^2) + mass_express_y3^(.9^3) + mass_express_y4^(.9^4) + mass_express_y5^(.9^5) + mass_express_y6^(.9^6) + mass_express_y7^(.9^7),
+                     pol_viol_mem = pol_viol_y1^(.9^1) + pol_viol_y2^(.9^2) + pol_viol_y3^(.9^3) + pol_viol_y4^(.9^4) + pol_viol_y5^(.9^5) + pol_viol_y6^(.9^6) + pol_viol_y7^(.9^7)
+                       ) %>% 
+              select(cowcode, 
+                     year_month,
+                     ends_with("mem"))
+
+final <- left_join(analysis_prep, lags_decay) %>% 
+         filter(year_month >= "Jan 1946", 
+                year_month <= "Dec 2006")
+
 ```
 
 e and Temporal Differences
