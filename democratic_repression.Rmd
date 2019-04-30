@@ -406,6 +406,25 @@ analysis <- left_join(analysis, interstate_final) %>%
                    )
 ```
 
+```{r v-dem_controls, include=FALSE}
+vdem <- read.csv("C:/Users/Christopher/Documents/Data/vdem/vdem/V-Dem-CY-Full+Others-v9.csv") 
+        
+vdem_controls <- vdem %>% 
+        filter(year >= 1944) %>% 
+        select(cowcode = COWcode,
+               ln_gdp_pc = e_migdppcln, 
+               year,
+               lexical = e_lexical_index,
+               tot_pop = e_mipopula,
+               urban_pop = e_miurbpop, 
+               infant_mortality = e_peinfmor,
+               life_expect = e_pelifeex)
+
+analysis$year <- as.numeric(format(analysis$year_month, "%Y"))
+
+analysis <- left_join(analysis, vdem_controls)
+```
+
 e and Temporal Differences
  When do democracies resort to repression? The literature on the dissent-repression nex
 Dissent and Repression: Regimus has been active for over forty years, but there are still important methodological improvements that can be made to this literature. To date, the most concrete findings are summarized in Davenport’s (2007) literature review: the law of coercive responsiveness, more murder in the middle, and the domestic democratic peace. The law of coercive responsiveness is that states are most likely to repress in response to a threat. More murder in the middle is the finding that regime types somewhere between full authoritarian and full democracy are the most violent repressors. The domestic democratic peace is threefold: democratic institutions increase the costs of state repression, democratic citizens accept democratic values of nonviolent expression and negotiating, and democracies provide alternative measures for political control. It is important to note that the domestic democratic peace only applies to states that cross a certain threshold of democratic-ness at which point they become ‘full’ democracies (Davenport 1995, 1999; Davenport and Armstrong 2004; Poe and Tate 1994; Regan and Henderson 2002). 
