@@ -1,0 +1,317 @@
+---
+title: "Democratic Repression: Responding in Kind? "
+author: "Christopher Junk"
+date: "March 10, 2019"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lme4)
+library(dotwhisker)
+```
+
+```{r, eval=T}
+analysis <- read.csv("dem_rep_fulldata.csv") %>% 
+            filter(lexical == 6) %>% 
+            select(cowcode, 
+                   year_month, 
+                   intrastate, 
+                   year, 
+                   ln_gdp_pc,
+                   lexical,
+                   tot_pop,
+                   urban_pop,
+                   infant_mortality,
+                   life_expect,
+                   pol_ex_mem,
+                   mass_express_mem,
+                   pol_viol_mem, 
+                   int_rep, 
+                   tan_rep, 
+                   vio_rep, 
+                   t, 
+                   t2, 
+                   t3) %>% 
+             mutate(ln_polex_mem = log10(pol_ex_mem + 1), 
+                    ln_massex_mem = log10(mass_express_mem + 1), 
+                    ln_polvio_mem = log10(pol_viol_mem + 1), 
+                    totpop10k = tot_pop/10000, 
+                    urbanpop10k = urban_pop/10000,
+                    lnt = log10(t),
+                    lnt2 = log10(t2),
+                    lnt3 = log10(t3)) 
+
+tictoc::tic()
+int_polex <- glmer(int_rep ~ 
+                     ln_polex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+int_massex <- glmer(int_rep ~ 
+                     ln_massex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+int_polviol <- glmer(int_rep ~ 
+                     ln_polvio_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+tan_polex <- glmer(tan_rep ~ 
+                     ln_polex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+tan_massex <- glmer(tan_rep ~ 
+                     ln_massex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+tan_polviol <- glmer(tan_rep ~ 
+                     ln_polvio_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+vio_polex <- glmer(vio_rep ~ 
+                     ln_polex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+vio_massex <- glmer(vio_rep ~ 
+                     ln_massex_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+vio_polviol <- glmer(vio_rep ~ 
+                     ln_polvio_mem + 
+                     intrastate + 
+                     ln_gdp_pc +
+                     totpop10k + 
+                     urbanpop10k + 
+                     lnt +
+                     lnt2 + 
+                     lnt3 + 
+                     (1 | cowcode), 
+                   family = binomial,
+                   data = analysis )
+
+beepr::beep(8)
+tictoc::toc()
+
+analysis <- analysis %>% 
+            mutate(complete = ifelse(!is.na(ln_polvio_mem &
+                                            ln_polex_mem &
+                                            ln_massex_mem &
+                                            int_rep &
+                                            tan_rep &
+                                            vio_rep &
+                                            intrastate & 
+                                            ln_gdp_pc &
+                                            totpop10k & 
+                                            urbanpop10k & 
+                                            lnt &
+                                            lnt2 & 
+                                            lnt3),
+                                     1, 
+                                     0), 
+                   date = ifelse(complete == 1, 
+                                 year_month, 
+                                 0))
+
+
+
+int_rep <- dwplot(c(int_polex, 
+                     int_massex, 
+                     int_polviol 
+                     ),
+                  vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) 
+
+intangible_repression <- int_rep %>% relabel_predictors(c(ln_polex_mem = "Political Expression",
+                                       ln_massex_mem = "Mass Expression",
+                                       ln_polvio_mem = "Political Violence", 
+                                       intrastate = "Civil War", 
+                                       ln_gdp_pc = "Logged GDP Per Capita",
+                                       totpop10k = "Total Population / 10k",
+                                       urbanpop10k = "Urban Population / 10k",
+                                       lnt = "T",
+                                       "sd_(Intercept).cowcode" = "SD of Intercept")
+                                      ) +
+                   ggtitle("Intangible Repression") +
+                   theme(plot.title = element_text(hjust = 0.5))
+
+tan_rep <- dwplot(c(tan_polex, 
+                     tan_massex, 
+                     tan_polviol),
+                   vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2))
+
+tangible_repression <- tan_rep %>% relabel_predictors(c(ln_polex_mem = "Political Expression",
+                                       ln_massex_mem = "Mass Expression",
+                                       ln_polvio_mem = "Political Violence", 
+                                       intrastate = "Civil War", 
+                                       ln_gdp_pc = "Logged GDP Per Capita",
+                                       totpop10k = "Total Population / 10k",
+                                       urbanpop10k = "Urban Population / 10k",
+                                       lnt = "T",
+                                       "sd_(Intercept).cowcode" = "SD of Intercept")
+                                      ) +
+                   ggtitle("Tangible Repression") +
+                   theme(plot.title = element_text(hjust = 0.5))
+
+vio_rep <- dwplot(c(vio_polex,
+                     vio_massex,
+                     vio_polviol),
+                   vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2))
+
+violent_repression <- vio_rep %>% relabel_predictors(c(ln_polex_mem = "Political Expression",
+                                       ln_massex_mem = "Mass Expression",
+                                       ln_polvio_mem = "Political Violence", 
+                                       intrastate = "Civil War", 
+                                       ln_gdp_pc = "Logged GDP Per Capita",
+                                       totpop10k = "Total Population / 10k",
+                                       urbanpop10k = "Urban Population / 10k",
+                                       lnt = "T",
+                                       "sd_(Intercept).cowcode" = "SD of Intercept")
+                                      ) +
+                   ggtitle("Violent Repression") +
+                   theme(plot.title = element_text(hjust = 0.5))
+```
+# Relevant Repression Findings
+* There is a dynamic relationship between dissent and repression (Lichbach 1987, Moore 1998)  
+
+* The level of threat a state experiences has a more robust association with repression than democratic-ness (Regan and Henderson 2002)  
+
+* As states democratize they tend to violate human rights less (Davenport 1999)  
+
+* In general, the “more murder in the middle” hypothesis seems to hold true here (Davenport 2007)  
+
+# Theoretical Expectations
+Assume:  
+
+* Leaders are selfish and seek relection 
+
+* Voters are actively aware of threats to public security  
+
+* Leaders keep their seats via providing sufficient security  
+
+* Democratic leaders behave in a normative context in which repression is not a legitimate policy tool.  
+
+Repressive policies are legitimated when the threat to security is sufficiently high  
+
+* The public accepts a tradeoff of autonomy for security when threat is sufficiently high (e.g. Davis and Silver 2004)  
+
+* Repression for the sake of security provision cannot be incongruent with dissent  
+
+# Type of Repression
+__Intangible Repression__  
+Violating political/civil rights; suspending government services  
+
+__Tangible Repression__  
+Mobilizing coercive forces, disbanding crowds, harassment, threats, arrests, suspending services, restricting movement (curfew)  
+
+__Violent Repression__  
+State attacks property/humans with force; including police/military forces  
+
+# Expectations
+  1.  Symbolic dissent memory is not associated with repression.  
+  1.  As mass expression memory increases, tangible and intangible repression becomes more likely.  
+  1.  As political violence memory increases, all repression becomes more likely (intangible, tangible, violent).  
+  
+$$\sum_{y=1}^{7}\sum_{m=1}^{12} dissent_{ym}^{.9^y}$$
+  
+# Analysis 
+* Random Effects Logit  
+    + April 1946 - Dec 2012  
+    + 85 countries  
+    + Electoral Democracy: 6 of 6 on Lexical Index  
+    + 20,739 Observations 
+
+\hfill
+
+* Controls:  
+    + Time polynomial (Carter and Signorino 2010)
+    + Civil War  
+    + Population (total and urban)  
+    + Logged GDP PC  
+
+# Intangible Repression 
+```{r}
+intangible_repression
+```
+
+# Tangible Repression
+```{r}
+tangible_repression
+```
+
+# Violent Repression
+```{r}
+violent_repression
+```
+
+

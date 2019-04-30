@@ -427,7 +427,7 @@ analysis_prep <- left_join(analysis_prep, vdem_controls)
 analysis_prep <- left_join(analysis_prep, speed_country_month)
 ```
 
-```{r analysis}
+```{r cleaning_memory_create, include = F}
 analysis <- analysis_prep %>% 
             group_by(cowcode) %>% 
             filter(year_month >= "Jan 1946", 
@@ -777,7 +777,8 @@ lags_decay <- lags_years %>%
                        ) %>% 
               select(cowcode, 
                      year_month,
-                     ends_with("mem"))
+                     ends_with("mem"), 
+                     everything())
 
 final <- left_join(analysis_prep, lags_decay) %>% 
          filter(year_month >= "Jan 1946", 
