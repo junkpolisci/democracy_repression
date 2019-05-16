@@ -18,7 +18,7 @@ library(lubridate)
 
 ```{r speed_read, include = F, cache=T}
 #Load in the dataset
-speed_full <- read.csv("C:/Users/Christopher/Documents/Data/speed/ssp_public.csv")
+speed_full <- read.csv("../Data/speed/ssp_public.csv")
 speed_full <- as_tibble(speed_full) %>% 
               janitor::clean_names()
 ```
@@ -414,7 +414,7 @@ analysis_prep <- left_join(analysis_prep, interstate_final) %>%
 ```
 
 ```{r v-dem_controls, include=FALSE, cache = T}
-vdem <- read.csv("C:/Users/Christopher/Documents/Data/vdem/vdem/V-Dem-CY-Full+Others-v9.csv") 
+vdem <- read.csv("../Data/vdem/vdem/V-Dem-CY-Full+Others-v9.csv") 
         
 vdem_controls <- vdem %>% 
         filter(year >= 1944) %>% 
@@ -1054,15 +1054,15 @@ vio_polvio <- glmer(vio_rep ~
 #make a data.frame of the coefficients to allow me more control over the coefficient plots
 coef_int_polex <- broom::tidy(int_polex) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Intangible Repression")
+                  mutate(model = "Political Expression")
 
 coef_int_massex <- broom::tidy(int_massex) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Intangible Repression")
+                  mutate(model = "Mass Expression")
 
 coef_int_polvio <- broom::tidy(int_polvio) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Intangible Repression")
+                  mutate(model = "Political Violence")
 
 int_rep <- rbind(coef_int_polex, coef_int_massex, coef_int_polvio) %>% 
            filter(term != "(Intercept)")
@@ -1107,15 +1107,15 @@ intangible_repression_all <- dwplot(int_rep,
 #make a dataframe of the estimates to allow me more control over the coefplot
 coef_tan_polex <- broom::tidy(tan_polex) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Tangible Repression")
+                  mutate(model = "Political Expression")
 
 coef_tan_massex <- broom::tidy(tan_massex) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Tangible Repression")
+                  mutate(model = "Mass Expression")
 
 coef_tan_polvio <- broom::tidy(tan_polvio) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Tangible Repression")
+                  mutate(model = "Political Violence")
 
 tan_rep <- rbind(coef_tan_polex, coef_tan_massex, coef_tan_polvio) %>% 
            filter(term != "(Intercept)")
@@ -1159,15 +1159,15 @@ tangible_repression_all <- dwplot(tan_rep,
 ```{r Violent Repression Coefplot Code, cache = T, include = F}
 coef_vio_polex <- broom::tidy(vio_polex) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Violent Repression")
+                  mutate(model = "Poltical Expression")
 
 coef_vio_massex <- broom::tidy(vio_massex) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Violent Repression")
+                  mutate(model = "Mass Expression")
 
 coef_vio_polvio <- broom::tidy(vio_polvio) %>% 
                   na.omit(estimate) %>% #removes SD of intercept
-                  mutate(model = "Violent Repression")
+                  mutate(model = "Political Violence")
 
 vio_rep <- rbind(coef_vio_polex, coef_vio_massex, coef_vio_polvio) %>% 
            filter(term != "(Intercept)")
